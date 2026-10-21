@@ -220,13 +220,18 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .hint, .modal p.hint{font-size:.78rem;color:var(--ink-muted);}
 
 .stats-list{display:flex;flex-direction:column;max-height:55vh;overflow-y:auto;}
+.stats-section-head{
+  font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-muted);
+  font-weight:700;padding:14px 4px 6px;border-bottom:1px solid var(--border);
+}
+.stats-section-head:first-child{padding-top:2px;}
 .stat-row{padding:9px 4px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px;}
 .stat-row .words{font-size:.92rem;overflow-wrap:break-word;}
 .stat-row .words .inf{font-weight:600;}
 .stat-row .words .sep{color:var(--ink-muted);padding:0 2px;}
 .stat-row.is-learned .words .inf{color:var(--success);}
 .stat-row .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.78rem;color:var(--ink-muted);}
-.stat-row .meta .box-dots{justify-content:flex-start;}
+.stat-row .deck-chip{background:var(--surface-2);border-radius:999px;padding:2px 9px;}
 .stat-row .due-today{color:var(--accent-2);font-weight:600;}
 footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-top:4px;}
 
@@ -918,9 +923,11 @@ function renderStats(){
   var doneToday = dailyWordsInScope().length;
   var frozenTotal = state.daily.totals ? state.daily.totals[state.activeDeck] : undefined;
   var dueToday = frozenTotal!==undefined ? frozenTotal : (doneToday + queue.length);
+  var miniLeft = Math.ceil(queue.length / BATCH_SIZE);
   statsRow.innerHTML =
     '<div class="chip">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
-    '<div class="chip">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>';
+    '<div class="chip">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>'+
+    '<div class="chip">Мини-тренировок осталось <b>'+miniLeft+'</b></div>';
 }
 
 function updateProgressBar(){
@@ -1408,14 +1415,31 @@ function renderStatsTable(){
   var rows = entries.map(function(e){ return {e:e, p: state.progress[entryProgKey(e)]}; });
   rows.sort(function(a,b){
     if(a.p.box !== b.p.box) return a.p.box - b.p.box;
+    if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
+      return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
+    }
     return a.e.word[0].localeCompare(b.e.word[0]);
   });
 
+  // box -> {label, interval description}, matches INTERVALS above — grouping
+  // by box with a section header replaces the old flat list (one continuous
+  // wall of rows) so it's scannable at a glance instead of read top to bottom.
+  var BOX_LABELS = {
+    1: "Новые слова · показываются каждый день",
+    2: "Бокс 2 · повтор через 1 день",
+    3: "Бокс 3 · повтор через 3 дня",
+    4: "Бокс 4 · повтор через неделю",
+    5: "Выучено · повтор от 2+ недель"
+  };
+
   var html = "";
+  var lastBox = null;
   rows.forEach(function(r){
     var box = r.p.box;
-    var dots = "";
-    for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
+    if(box !== lastBox){
+      html += '<div class="stats-section-head">'+BOX_LABELS[box]+' ('+(counts[box]||0)+')</div>';
+      lastBox = box;
+    }
     var dueLabel;
     if(r.p.due <= today) dueLabel = '<span class="due-today">сегодня</span>';
     else {
@@ -1427,10 +1451,10 @@ function renderStatsTable(){
       : r.e.kind==="conjug"
       ? '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[2]
       : '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[1];
-    var deckTag = state.activeDeck==="__all__" ? '<span class="sep">·</span>'+state.decks[r.e.deckId].name : '';
+    var deckTag = state.activeDeck==="__all__" ? '<span class="deck-chip">'+state.decks[r.e.deckId].name+'</span>' : '<span></span>';
     html += '<div class="stat-row'+(r.p.learned?' is-learned':'')+'">'+
-      '<div class="words">'+wordsLine+deckTag+'</div>'+
-      '<div class="meta"><span class="box-dots">'+dots+'</span><span>'+dueLabel+'</span></div>'+
+      '<div class="words">'+wordsLine+'</div>'+
+      '<div class="meta">'+deckTag+'<span>'+dueLabel+'</span></div>'+
     '</div>';
   });
   document.getElementById("statsTable").innerHTML = html;

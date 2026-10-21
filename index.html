@@ -427,7 +427,7 @@ var DEFAULT_DECKS = {
       ["Aller ___ Japon","au",["en","aux","à"],"ехать в Японию"],
       ["Aller ___ États-Unis","aux",["en","au","à"],"ехать в США"],
       ["Aller ___ Pays-Bas","aux",["en","au","à"],"ехать в Нидерланды"],
-      ["Un ticket ___ bus","de",["du","des","le"],"билет на автобус (de, не du — как «verre de vin»)"],
+      ["Un ticket ___ bus","de",["du","des","le"],"билет на автобус"],
       ["de + le = ?","du",["au","des","de le"],"слияние предлога и артикля"],
       ["à + le = ?","au",["du","des","à le"],"слияние предлога и артикля"],
       ["de + les = ?","des",["du","au","aux"],"слияние предлога и артикля"],
@@ -503,9 +503,8 @@ function normalizeState(raw){
   var s = raw || {};
   if(s.decks){
     if(!s.progress) s.progress = {};
-    if(!s.daily || !s.daily.words) s.daily = {date: todayStr(), words:{}, cleanWords:{}, totals:{}};
+    if(!s.daily || !s.daily.words) s.daily = {date: todayStr(), words:{}, cleanWords:{}};
     if(!s.daily.cleanWords) s.daily.cleanWords = {};
-    if(!s.daily.totals) s.daily.totals = {};
     s.activeDeck = "__all__";
     // Backfill any autoAdd default deck this saved state doesn't have yet
     // (e.g. one of the original decks added to DEFAULT_DECKS after this
@@ -556,7 +555,7 @@ function normalizeState(raw){
   // the old daily tracker (if today's) used bare word keys — re-key them
   // under "passe-compose::" so today's "Сегодня" count survives the move.
   var oldDaily = (s.daily && s.daily.date===todayStr() && s.daily.words) ? s.daily : null;
-  var newDaily = {date: todayStr(), words:{}, cleanWords:{}, totals:{}};
+  var newDaily = {date: todayStr(), words:{}, cleanWords:{}};
   if(oldDaily){
     Object.keys(oldDaily.words).forEach(function(k){
       newDaily.words[deckProgKey("passe-compose", k)] = true;
@@ -831,6 +830,16 @@ function dailyCleanInScope(){
 }
 
 var queue = [];
+// "Сегодня X/Y" target per scope (__all__ or a single deck id), kept only
+// in memory for this page load — NOT persisted to the db. It used to be
+// stored in state.daily.totals, but that write was unreliable (it could
+// end up missing from the saved document entirely), so every reload
+// recomputed it from scratch and the shown number kept jumping around.
+// Recomputing fresh per page load is deliberate and safe: within one
+// load it only ever grows (never shrinks, never lets X exceed Y), and a
+// fresh load naturally re-snapshots "what's due now" with no stale
+// leftover state to desync.
+var dailyTarget = {};
 var freePractice = false;
 var current = null;          // one entry, see poolEntries()
 var resolved = {};
@@ -921,13 +930,11 @@ function renderStats(){
   entries.forEach(function(e){ if(state.progress[entryProgKey(e)].learned) learnedCount++; });
   var total = entries.length;
   var doneToday = dailyWordsInScope().length;
-  var frozenTotal = state.daily.totals ? state.daily.totals[state.activeDeck] : undefined;
+  var frozenTotal = dailyTarget[state.activeDeck];
   var dueToday = frozenTotal!==undefined ? frozenTotal : (doneToday + queue.length);
-  var miniLeft = Math.ceil(queue.length / BATCH_SIZE);
   statsRow.innerHTML =
     '<div class="chip">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
-    '<div class="chip">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>'+
-    '<div class="chip">Мини-тренировок осталось <b>'+miniLeft+'</b></div>';
+    '<div class="chip">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>';
 }
 
 function updateProgressBar(){
@@ -1286,21 +1293,32 @@ function renderSummary(isFinal){
   renderStats();
   var pct = batchSeen ? Math.round((batchCorrect/batchSeen)*100) : 0;
   var title = isFinal ? "На сегодня всё" : "Мини-тренировка пройдена";
-  var text = batchSeen
-    ? 'За эти '+batchSeen+' слов: '+pct+'% без единой ошибки или подсказки'+(batchLearned?', выучено новых: '+batchLearned:'')+'.'
-    : 'Пока нечего повторять — всё уже отвечено сегодня.';
   var remaining = queue.length;
+  var miniLeft = Math.ceil(remaining / BATCH_SIZE);
   var dayWords = dailyWordsInScope().length;
   var dayClean = dailyCleanInScope();
   var dayPct = dayWords ? Math.round((dayClean/dayWords)*100) : 0;
-  var dayText = dayWords
-    ? 'Всего сегодня: '+dayWords+' слов, '+dayPct+'% без единой ошибки или подсказки.'
+
+  // Chip rows instead of prose sentences — easier to scan than a paragraph,
+  // same "chip" style already used for the header stats.
+  var batchChips = batchSeen
+    ? '<div class="chip">'+pct+'% чисто</div><div class="chip">'+batchSeen+' слов</div>'+
+      (batchLearned ? '<div class="chip">выучено новых <b>'+batchLearned+'</b></div>' : '')
     : '';
+  var remainingChip = (!isFinal && remaining>0)
+    ? '<div class="chip">Осталось <b>'+remaining+'</b> слов ('+miniLeft+' м.т.)</div>'
+    : '';
+  var dayChips = dayWords
+    ? '<div class="chip">Сегодня всего <b>'+dayWords+'</b> слов</div><div class="chip">'+dayPct+'% чисто</div>'
+    : '';
+  var emptyText = !batchSeen ? '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>' : '';
+
   var html = '<div class="empty">'+
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>'+
     '<h3>'+title+'</h3>'+
-    '<p>'+text+(!isFinal ? ' Осталось на сегодня: '+remaining+'.' : '')+'</p>'+
-    (dayText ? '<p class="hint">'+dayText+'</p>' : '')+
+    emptyText+
+    (batchChips || remainingChip ? '<div class="stats">'+batchChips+remainingChip+'</div>' : '')+
+    (dayChips ? '<div class="stats">'+dayChips+'</div>' : '')+
     (!isFinal && remaining>0
       ? '<button class="btn primary" id="continueBtn">Продолжить</button>'
       : '<button class="btn primary" id="practiceMoreBtn">Тренироваться ещё (вне графика)</button>')+
@@ -1344,31 +1362,19 @@ function startSession(){
     // This reset must run BEFORE buildDueQueue(), which checks daily.words
     // to exclude words already answered today — on yesterday's stale
     // daily.words, that check would wrongly suppress today's first pass.
-    state.daily = {date: todayStr(), words: {}, cleanWords: {}, totals: {}};
+    state.daily = {date: todayStr(), words: {}, cleanWords: {}};
     saveState();
+    dailyTarget = {}; // new calendar day — yesterday's in-memory targets no longer apply
   }
   if(!state.daily.cleanWords) state.daily.cleanWords = {};
-  if(!state.daily.totals) state.daily.totals = {};
   queue = buildDueQueue();
-  // The "Сегодня X/Y" target is frozen per training mode the first time
-  // it's opened each day, so reopening/reloading later the same day shows
-  // the same Y — it only ever grows if more got done than it allowed for
-  // (never shrinks, never lets done exceed it).
+  // The "Сегодня X/Y" target only ever grows within this page load (never
+  // shrinks, never lets X exceed Y) — see the dailyTarget comment above.
   var scopeKey = state.activeDeck;
   var doneNow = dailyWordsInScope().length;
-  var frozen = state.daily.totals[scopeKey];
-  var changedTotal = false;
-  if(frozen===undefined){
-    state.daily.totals[scopeKey] = doneNow + queue.length;
-    changedTotal = true;
-  } else if(doneNow > frozen){
-    state.daily.totals[scopeKey] = doneNow;
-    changedTotal = true;
-  }
-  if(changedTotal){
-    var totalsPatch = {};
-    totalsPatch[scopeKey] = state.daily.totals[scopeKey];
-    patchState({daily:{date: state.daily.date, totals: totalsPatch}});
+  var liveTotal = doneNow + queue.length;
+  if(dailyTarget[scopeKey]===undefined || liveTotal>dailyTarget[scopeKey]){
+    dailyTarget[scopeKey] = liveTotal;
   }
   updateFooterNote();
   startBatch();
@@ -1452,9 +1458,11 @@ function renderStatsTable(){
       ? '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[2]
       : '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[1];
     var deckTag = state.activeDeck==="__all__" ? '<span class="deck-chip">'+state.decks[r.e.deckId].name+'</span>' : '<span></span>';
+    var dots = "";
+    for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
     html += '<div class="stat-row'+(r.p.learned?' is-learned':'')+'">'+
       '<div class="words">'+wordsLine+'</div>'+
-      '<div class="meta">'+deckTag+'<span>'+dueLabel+'</span></div>'+
+      '<div class="meta"><span class="box-dots">'+dots+'</span>'+deckTag+'<span style="margin-left:auto">'+dueLabel+'</span></div>'+
     '</div>';
   });
   document.getElementById("statsTable").innerHTML = html;

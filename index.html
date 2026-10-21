@@ -1,0 +1,1536 @@
+<title>Passé Composé</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* layout: single centered flashcard column; one screen = prompt + one or two
+   answer fields, answered by a single click/Enter each, no submit button;
+   every 10 words a mini check-in. Multi-deck: a deck is either "verb"
+   (infinitif + participe passé, prompt = ru translation) or "word" (single
+   field, direction randomized each round). */
+:root{
+  --bg:#eef0ea;
+  --surface:#ffffff;
+  --surface-2:#e4e6de;
+  --ink:#1c2420;
+  --ink-muted:#5b6459;
+  --border:#cdd1c4;
+  --accent:#7a2331;
+  --accent-ink:#ffffff;
+  --accent-2:#9a6a2a;
+  --success:#2f6b4f;
+  --success-bg:#e3efe8;
+  --danger:#a8342a;
+  --danger-bg:#f7e6e3;
+  --radius:14px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121712;
+    --surface:#1b2119;
+    --surface-2:#242b21;
+    --ink:#eceee6;
+    --ink-muted:#a7ae9f;
+    --border:#333c2f;
+    --accent:#d97985;
+    --accent-ink:#1c0d0f;
+    --accent-2:#d9a441;
+    --success:#7fd3a6;
+    --success-bg:#1c2f24;
+    --danger:#e2857c;
+    --danger-bg:#331f1c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121712;
+  --surface:#1b2119;
+  --surface-2:#242b21;
+  --ink:#eceee6;
+  --ink-muted:#a7ae9f;
+  --border:#333c2f;
+  --accent:#d97985;
+  --accent-ink:#1c0d0f;
+  --accent-2:#d9a441;
+  --success:#7fd3a6;
+  --success-bg:#1c2f24;
+  --danger:#e2857c;
+  --danger-bg:#331f1c;
+  color-scheme: dark;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Public Sans",ui-sans-serif,system-ui,sans-serif;
+  padding-inline:16px;
+  padding-block:20px;
+  min-height:100%;
+}
+h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
+.wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:16px;}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.topbar .title{font-size:1.3rem;font-weight:600;letter-spacing:-0.01em;}
+.topbar .title em{font-style:normal;color:var(--accent);}
+.iconbtn{
+  width:38px;height:38px;border-radius:50%;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink-muted);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;flex:none;
+}
+.iconbtn:hover{color:var(--ink);border-color:var(--ink-muted);}
+.iconbtn svg{width:18px;height:18px;}
+
+.deck-select{
+  font:inherit;font-size:.85rem;padding:8px 10px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink);width:100%;
+}
+
+.stats{display:flex;gap:8px;flex-wrap:wrap;}
+.chip{
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;
+  padding:6px 12px;font-size:.78rem;color:var(--ink-muted);display:flex;gap:6px;align-items:baseline;
+  font-variant-numeric:tabular-nums;
+}
+.chip b{color:var(--ink);font-size:.86rem;font-weight:700;}
+
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:28px 26px;display:flex;flex-direction:column;gap:18px;
+}
+.eyebrow{
+  font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-muted);
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+}
+.box-dots{display:flex;gap:4px;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--border);}
+.dot.on{background:var(--accent-2);}
+
+.ruword{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:2.1rem;text-align:center;padding-block:6px;letter-spacing:-0.01em;}
+.deck-tag{font-size:.7rem;color:var(--ink-muted);text-align:right;}
+
+.fields-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
+.field{
+  flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:10px;
+  background:var(--surface-2);border-radius:12px;padding:14px;
+}
+@media (max-width: 480px){
+  /* below this, 220px-wide columns would squeeze instead of wrap, and
+     choice text/inputs get cramped — stack full-width instead */
+  .fields-row{flex-direction:column;}
+  .field{flex-basis:auto;}
+}
+.field-label{font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted);display:flex;justify-content:space-between;align-items:center;}
+
+.choices{display:flex;flex-direction:column;gap:7px;}
+.choice-btn{
+  text-align:left;padding:10px 13px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+}
+.choice-btn:hover{border-color:var(--accent-2);}
+.choice-btn.correct{background:var(--success-bg);border-color:var(--success);color:var(--success);font-weight:600;}
+.choice-btn.wrong{background:var(--danger-bg);border-color:var(--danger);color:var(--danger);}
+.choice-btn.removed{opacity:.35;text-decoration:line-through;}
+.choice-btn:disabled{cursor:default;}
+.choice-btn.selected{border-color:var(--accent-2);box-shadow:0 0 0 2px var(--accent-2) inset;}
+
+.match-wrap{display:flex;gap:14px;align-items:flex-start;}
+.match-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:7px;}
+.match-row{display:flex;align-items:center;gap:6px;}
+.match-row .choice-btn{flex:1;}
+@media (max-width: 480px){ .match-wrap{flex-direction:column;} }
+
+.type-row{display:flex;gap:6px;align-items:center;}
+.type-input{
+  flex:1;min-width:0;padding:10px 12px;border-radius:9px;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--ink);font:inherit;font-size:1rem;
+}
+.type-input:focus{outline:none;border-color:var(--accent-2);}
+.type-input.correct{border-color:var(--success);background:var(--success-bg);}
+.type-input.wrong{border-color:var(--danger);background:var(--danger-bg);}
+.reveal-label{font-size:.82rem;color:var(--accent-2);font-style:italic;}
+.accent-row{display:flex;flex-wrap:wrap;gap:5px;}
+.accent-key{
+  width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:var(--surface);
+  color:var(--ink-muted);font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.accent-key:hover{color:var(--ink);}
+
+.field-actions{display:flex;gap:6px;flex:none;}
+.hintbtn, .revealbtn{
+  flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--surface);
+  color:var(--accent-2);cursor:pointer;font-size:.78rem;font-weight:700;line-height:1;
+}
+.hintbtn:disabled, .revealbtn:disabled{opacity:.35;cursor:default;}
+
+.speakmini{
+  width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--surface);
+  color:var(--accent);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none;
+}
+.speakmini svg{width:13px;height:13px;}
+
+.row{display:flex;gap:10px;}
+.btn{
+  font:inherit;font-weight:600;font-size:.92rem;border-radius:10px;border:1px solid var(--border);
+  padding:11px 16px;cursor:pointer;background:var(--surface-2);color:var(--ink);flex:1;
+}
+.btn:hover{border-color:var(--ink-muted);}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+.btn.primary:hover{opacity:.92;}
+.btn.ghost{background:transparent;}
+.btn:disabled{opacity:.45;cursor:default;}
+
+.progressbar{height:4px;border-radius:999px;background:var(--surface-2);overflow:hidden;}
+.progressbar > div{height:100%;background:var(--accent-2);transition:width .25s ease;}
+
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding-block:28px;}
+.empty svg{width:46px;height:46px;color:var(--accent-2);}
+.empty p{color:var(--ink-muted);font-size:.92rem;max-width:34ch;}
+
+.overlay{
+  position:fixed;inset:0;background:rgba(20,22,18,.5);display:flex;align-items:center;justify-content:center;
+  padding:20px;z-index:10;
+}
+.modal{
+  position:relative;
+  background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);
+  width:100%;max-width:440px;max-height:85vh;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:12px;
+}
+.modal h2{font-size:1.1rem;padding-right:28px;}
+.modal-close{
+  position:absolute;top:16px;right:16px;width:26px;height:26px;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface);color:var(--ink-muted);
+  font-size:1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.modal-close:hover{color:var(--ink);border-color:var(--accent-2);}
+.modal textarea{
+  width:100%;min-height:260px;font-family:ui-monospace,monospace;font-size:.82rem;line-height:1.5;
+  padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);resize:vertical;
+}
+.modal input[type="text"]{
+  width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface-2);color:var(--ink);font:inherit;font-size:.92rem;
+}
+.modal label{font-size:.85rem;display:flex;align-items:center;gap:6px;}
+.hint, .modal p.hint{font-size:.78rem;color:var(--ink-muted);}
+
+.stats-list{display:flex;flex-direction:column;max-height:55vh;overflow-y:auto;}
+.stat-row{padding:9px 4px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px;}
+.stat-row .words{font-size:.92rem;overflow-wrap:break-word;}
+.stat-row .words .inf{font-weight:600;}
+.stat-row .words .sep{color:var(--ink-muted);padding:0 2px;}
+.stat-row.is-learned .words .inf{color:var(--success);}
+.stat-row .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.78rem;color:var(--ink-muted);}
+.stat-row .meta .box-dots{justify-content:flex-start;}
+.stat-row .due-today{color:var(--accent-2);font-weight:600;}
+footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-top:4px;}
+
+[hidden]{display:none!important;}
+</style>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="title">Passé <em>Composé</em></div>
+    <div class="row" style="flex:none;gap:8px;">
+      <button class="iconbtn" id="statsBtn" title="Статистика по словам" aria-label="Статистика по словам">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10"/><path d="M11 19V5"/><path d="M18 19v-7"/></svg>
+      </button>
+      <button class="iconbtn" id="editBtn" title="Наборы слов" aria-label="Наборы слов">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 13.5a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V20a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1H4a2 2 0 110-4h.09a1.7 1.7 0 001.56-1 1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.87.34H10a1.7 1.7 0 001-1.56V4a2 2 0 114 0v.09a1.7 1.7 0 001 1.56 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87V10a1.7 1.7 0 001.56 1H20a2 2 0 110 4h-.09a1.7 1.7 0 00-1.56 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <select id="deckModeSelect" class="deck-select"></select>
+
+  <div class="stats" id="statsRow"></div>
+
+  <div class="progressbar"><div id="progressFill" style="width:0%"></div></div>
+
+  <div class="card" id="cardArea"></div>
+
+  <footer class="note" id="footerNote"></footer>
+</div>
+
+<div class="overlay" id="statsOverlay" hidden>
+  <div class="modal" style="max-width:560px;">
+    <button type="button" class="modal-close" id="closeStatsBtn" title="Закрыть">✕</button>
+    <h2>Статистика по словам</h2>
+    <div class="stats" id="statsSummary"></div>
+    <div class="stats-list" id="statsTable"></div>
+  </div>
+</div>
+
+<div class="overlay" id="editOverlay" hidden>
+  <div class="modal">
+    <button type="button" class="modal-close" id="cancelEditBtn" title="Закрыть">✕</button>
+    <h2>Наборы слов</h2>
+    <select id="editDeckSelect" class="deck-select"></select>
+
+    <div id="newDeckPanel" hidden>
+      <input type="text" id="newDeckName" placeholder="Название набора">
+      <div class="row" style="margin-top:10px;flex-direction:column;gap:8px;">
+        <label><input type="radio" name="newDeckKind" value="verb" checked> Глаголы (инфинитив + причастие прошедшего времени)</label>
+        <label><input type="radio" name="newDeckKind" value="word"> Просто перевод (слово ⇄ перевод)</label>
+        <label><input type="radio" name="newDeckKind" value="cloze"> Вставить пропуск (предлог/артикль с вариантами-ловушками)</label>
+        <label><input type="radio" name="newDeckKind" value="conjug"> Спряжение (все 6 форм présent одной карточкой)</label>
+      </div>
+      <button class="btn primary" id="createDeckBtn" style="margin-top:10px;">Создать набор</button>
+    </div>
+
+    <div id="editDeckBody">
+      <p class="hint" id="editFormatHint"></p>
+      <textarea id="editArea" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="btn primary" id="saveEditBtn">Сохранить</button>
+      </div>
+      <div class="row">
+        <button class="btn ghost" id="resetProgressBtn">Сбросить прогресс (этот набор)</button>
+      </div>
+      <div class="row">
+        <button class="btn ghost" id="deleteDeckBtn">Удалить этот набор</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ---- default decks ----
+var DEFAULT_DECKS = {
+  "passe-compose": {
+    name: "Passé Composé",
+    kind: "verb",
+    words: [
+      ["Lire","lu","Читать"],["Voir","vu","Видеть"],["Boire","bu","Пить"],
+      ["Entendre","entendu","Слышать"],["Attendre","attendu","Ждать"],["Répondre","répondu","Отвечать"],
+      ["Perdre","perdu","Терять"],["Vouloir","voulu","Хотеть"],["Devoir","dû","Быть должным, быть обязанным"],
+      ["Pouvoir","pu","Мочь"],["Savoir","su","Знать"],["Croire","cru","Верить, полагать"],
+      ["Falloir","fallu","Быть необходимым (il faut)"],["Courir","couru","Бегать"],["Connaître","connu","Знать, быть знакомым"],
+      ["Disparaître","disparu","Исчезать"],["Plaire","plu","Нравиться"],["Pleuvoir","plu","Идти (о дожде)"],
+      ["Recevoir","reçu","Получать"],["Venir","venu","Приходить, приезжать"],["Vivre","vécu","Жить"],
+      ["Finir","fini","Заканчивать"],["Grandir","grandi","Расти, взрослеть"],["Choisir","choisi","Выбирать"],
+      ["Prendre","pris","Брать"],["Apprendre","appris","Учить, узнавать"],["Comprendre","compris","Понимать"],
+      ["Mettre","mis","Класть, ставить"],["Dire","dit","Говорить, сказать"],["Écrire","écrit","Писать"],
+      ["Conduire","conduit","Водить (машину)"],["Faire","fait","Делать"],["Être","été","Быть"],
+      ["Avoir","eu","Иметь"],["Ouvrir","ouvert","Открывать"],["Découvrir","découvert","Открывать, обнаруживать"],
+      ["Offrir","offert","Дарить, предлагать"],["Souffrir","souffert","Страдать"],["Peindre","peint","Красить, рисовать"],
+      ["Craindre","craint","Бояться"],
+      ["Manger","mangé","Есть, кушать"],["Regarder","regardé","Смотреть"]
+    ]
+  },
+  "transport-ch": {
+    name: "Транспорт",
+    kind: "word",
+    words: [
+      ["l'heure de pointe","час пик"],
+      ["le trottoir","тротуар"],
+      ["rater","опоздать, пропустить"],
+      ["se garer","парковаться"],
+      ["atterrir","приземляться (о самолёте)"],
+      ["décoller","взлетать (о самолёте)"],
+      ["monter","садиться в транспорт, подниматься"],
+      ["descendre","выходить из транспорта, спускаться"],
+      ["prendre de l'essence","заправляться бензином"],
+      ["le permis de conduire","водительские права"],
+      ["le parking gratuit","бесплатная парковка"],
+      ["une amende","штраф"],
+      ["le feu","светофор"],
+      ["le quai","платформа, перрон"],
+      ["des bouchons","пробки на дорогах"],
+      ["le terminus","конечная остановка"],
+      ["l'autoroute","автомагистраль"],
+      ["faire le plein","заправить полный бак"],
+      ["un ticket de bus","билет на автобус"],
+      ["un billet aller-retour","билет туда-обратно"],
+      ["la piste cyclable","велосипедная дорожка"],
+      ["le passage piéton","пешеходный переход"],
+      ["embarquer","садиться на борт (самолёта, корабля)"],
+      ["la station-service","автозаправка (АЗС)"],
+      ["le guichet","касса, окошко обслуживания"],
+      ["mince","блин! чёрт! (мягкое восклицание)"],
+      ["rouler","ехать, двигаться (о транспорте)"],
+      ["sinon","иначе, в противном случае"],
+      ["un aller simple","билет в одну сторону"],
+      ["prendre rendez-vous","записаться (на приём/встречу)"],
+      ["prendre froid","простудиться"],
+      ["prendre une décision","принять решение"],
+      ["tourner","поворачивать"],
+      ["aller tout droit","идти прямо"],
+      ["continuer tout droit","идти прямо (продолжать)"],
+      ["traverser la rue","перейти улицу"],
+      ["prendre une rue","свернуть на улицу"],
+      ["le bout","конец, край"],
+      ["le pont","мост"],
+      ["prendre le pont","перейти/проехать по мосту"],
+      ["la rivière","река"]
+    ]
+  },
+  "prepositions-ch": {
+    name: "Предлоги и артикли",
+    kind: "cloze",
+    words: [
+      ["___ gauche","à",["de","en","dans"],"налево"],
+      ["___ droite","à",["de","en","dans"],"направо"],
+      ["Faire ___ stop","du",["de","de la","le"],"голосовать на дороге (автостоп)"],
+      ["Aller ___ bout de la rue","au",["à le","à","du"],"дойти до конца улицы"],
+      ["Passer ___ le pont","par",["à","de","dans"],"пройти через мост"],
+      ["Aller ___ la gare","jusqu'à",["à","vers","jusqu'au"],"дойти/доехать до вокзала"],
+      ["Passer ___ la mairie","devant",["derrière","à côté de","près de"],"пройти мимо мэрии"],
+      ["Prendre ___ bus","le",["la","les","l'"],"сесть на автобус (также: le train, le métro)"],
+      ["Venir ___ France","de",["du","des","d'"],"приезжать из Франции"],
+      ["Venir ___ Italie","d'",["de","du","des"],"приезжать из Италии"],
+      ["Venir ___ Portugal","du",["de","des","d'"],"приезжать из Португалии"],
+      ["Venir ___ Japon","du",["de","des","d'"],"приезжать из Японии"],
+      ["Venir ___ États-Unis","des",["de","du","d'"],"приезжать из США"],
+      ["Venir ___ Pays-Bas","des",["de","du","d'"],"приезжать из Нидерландов"],
+      ["Aller ___ France","en",["au","aux","à"],"ехать во Францию"],
+      ["Aller ___ Italie","en",["au","aux","à"],"ехать в Италию"],
+      ["Aller ___ Portugal","au",["en","aux","à"],"ехать в Португалию"],
+      ["Aller ___ Japon","au",["en","aux","à"],"ехать в Японию"],
+      ["Aller ___ États-Unis","aux",["en","au","à"],"ехать в США"],
+      ["Aller ___ Pays-Bas","aux",["en","au","à"],"ехать в Нидерланды"],
+      ["Un ticket ___ bus","de",["du","des","le"],"билет на автобус (de, не du — как «verre de vin»)"],
+      ["de + le = ?","du",["au","des","de le"],"слияние предлога и артикля"],
+      ["à + le = ?","au",["du","des","à le"],"слияние предлога и артикля"],
+      ["de + les = ?","des",["du","au","aux"],"слияние предлога и артикля"],
+      ["à + les = ?","aux",["à le","du","des"],"слияние предлога и артикля"]
+    ]
+  },
+  "conjugaison-ch": {
+    name: "Спряжения (présent)",
+    kind: "conjug",
+    words: [
+      ["être",["suis","es","est","sommes","êtes","sont"],"быть"],
+      ["avoir",["ai","as","a","avons","avez","ont"],"иметь"],
+      ["aller",["vais","vas","va","allons","allez","vont"],"идти, ехать"],
+      ["pouvoir",["peux","peux","peut","pouvons","pouvez","peuvent"],"мочь"],
+      ["vouloir",["veux","veux","veut","voulons","voulez","veulent"],"хотеть"],
+      ["prendre",["prends","prends","prend","prenons","prenez","prennent"],"брать"],
+      ["comprendre",["comprends","comprends","comprend","comprenons","comprenez","comprennent"],"понимать"],
+      ["apprendre",["apprends","apprends","apprend","apprenons","apprenez","apprennent"],"учить, узнавать"],
+      ["connaître",["connais","connais","connaît","connaissons","connaissez","connaissent"],"знать (кого-то), быть знакомым"],
+      ["venir",["viens","viens","vient","venons","venez","viennent"],"приходить, приезжать"],
+      ["faire",["fais","fais","fait","faisons","faites","font"],"делать"],
+      ["dire",["dis","dis","dit","disons","dites","disent"],"говорить, сказать"],
+      ["mettre",["mets","mets","met","mettons","mettez","mettent"],"класть, ставить"],
+      ["voir",["vois","vois","voit","voyons","voyez","voient"],"видеть"],
+      ["savoir",["sais","sais","sait","savons","savez","savent"],"знать (факты)"],
+      ["devoir",["dois","dois","doit","devons","devez","doivent"],"быть должным, быть обязанным"],
+      ["partir",["pars","pars","part","partons","partez","partent"],"уезжать, уходить"]
+    ]
+  }
+};
+
+var INTERVALS = {1:0,2:1,3:3,4:7,5:16};
+var BATCH_SIZE = 10;
+var STORE_KEY = "frTrainerState_v5";
+// toISOString() is always UTC, but addDays() below parses "YYYY-MM-DDT00:00:00"
+// (no "Z") as LOCAL midnight — mixing the two meant "today" could silently
+// mean yesterday's UTC date for hours around her local midnight, so a word
+// answered cleanly just now could get stamped due "today" instead of
+// tomorrow (then look stuck/repeating). Build today's string from local
+// date parts instead, so both always agree on the same calendar day.
+var todayStr = function(){
+  var d = new Date();
+  var mm = String(d.getMonth()+1).padStart(2,"0");
+  var dd = String(d.getDate()).padStart(2,"0");
+  return d.getFullYear()+"-"+mm+"-"+dd;
+};
+var addDays = function(dateStr, n){
+  var d = new Date(dateStr+"T00:00:00");
+  d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+};
+
+function wordKey(s){ return String(s).trim().toLowerCase(); }
+function deckProgKey(deckId, key){ return deckId+"::"+key; }
+function freshProgressEntry(){ return {box:1, due:todayStr(), learned:false}; }
+
+function loadLocalStateIfAny(){
+  try{
+    var raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return null;
+}
+
+// Normalizes whatever was loaded (old single-deck shape, a partial/empty
+// object, or the current multi-deck shape) into one consistent shape, and
+// backfills anything missing (progress entries for new words, the daily
+// counters). This is the one place old data gets migrated, so every other
+// function can assume `state.decks`/`state.progress`/`state.daily` are
+// always present and complete.
+function normalizeState(raw){
+  var s = raw || {};
+  if(s.decks){
+    if(!s.progress) s.progress = {};
+    if(!s.daily || !s.daily.words) s.daily = {date: todayStr(), words:{}, cleanWords:{}, totals:{}};
+    if(!s.daily.cleanWords) s.daily.cleanWords = {};
+    if(!s.daily.totals) s.daily.totals = {};
+    s.activeDeck = "__all__";
+    // Backfill any default deck this saved state doesn't have yet (e.g. a
+    // deck added to DEFAULT_DECKS after this user's first load) — without
+    // this, a brand-new default deck only ever shows up for users whose
+    // state hasn't been created yet, never for an already-migrated one.
+    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+      if(!s.decks[deckId]) s.decks[deckId] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
+    });
+    Object.keys(s.decks).forEach(function(deckId){
+      s.decks[deckId].words.forEach(function(w){
+        var key = deckProgKey(deckId, wordKey(w[0]));
+        if(!s.progress[key]) s.progress[key] = freshProgressEntry();
+      });
+    });
+    return s;
+  }
+  // old shape (or nothing at all): migrate into "passe-compose" + seed the
+  // transport deck fresh, without touching any real progress she already has.
+  var oldWords = s.words || DEFAULT_DECKS["passe-compose"].words;
+  var oldProgress = s.progress || {};
+  var newProgress = {};
+  oldWords.forEach(function(w){
+    newProgress[deckProgKey("passe-compose", wordKey(w[0]))] = oldProgress[wordKey(w[0])] || freshProgressEntry();
+  });
+  var transport = JSON.parse(JSON.stringify(DEFAULT_DECKS["transport-ch"]));
+  transport.words.forEach(function(w){
+    newProgress[deckProgKey("transport-ch", wordKey(w[0]))] = freshProgressEntry();
+  });
+  // Any other default deck beyond passe-compose/transport-ch (added after
+  // this legacy migration path was written) gets seeded fresh too, the same
+  // way transport-ch does — otherwise a brand-new user (nothing in db/
+  // localStorage yet) only ever sees the two oldest decks.
+  var extraDecks = {};
+  Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+    if(deckId==="passe-compose" || deckId==="transport-ch") return;
+    var deck = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
+    deck.words.forEach(function(w){
+      newProgress[deckProgKey(deckId, wordKey(w[0]))] = freshProgressEntry();
+    });
+    extraDecks[deckId] = deck;
+  });
+  // the old daily tracker (if today's) used bare word keys — re-key them
+  // under "passe-compose::" so today's "Сегодня" count survives the move.
+  var oldDaily = (s.daily && s.daily.date===todayStr() && s.daily.words) ? s.daily : null;
+  var newDaily = {date: todayStr(), words:{}, cleanWords:{}, totals:{}};
+  if(oldDaily){
+    Object.keys(oldDaily.words).forEach(function(k){
+      newDaily.words[deckProgKey("passe-compose", k)] = true;
+    });
+  }
+  var decks = { "passe-compose": {name:"Passé Composé", kind:"verb", words: oldWords}, "transport-ch": transport };
+  Object.keys(extraDecks).forEach(function(deckId){ decks[deckId] = extraDecks[deckId]; });
+  return {
+    decks: decks,
+    progress: newProgress,
+    daily: newDaily,
+    activeDeck: "__all__"
+  };
+}
+
+// Progress lives in the artifact's own shared database when available, so
+// it's the same on every device/browser where this link is opened — not
+// per-browser like localStorage, which was the cause of "progress reset"
+// when opening from a different device. localStorage is only a fallback
+// for when db isn't available, and the one-time source to migrate an
+// existing local progress into the shared store the first time it runs.
+var dbNS = null;
+var useDb = false;
+
+function saveState(){
+  if(useDb && dbNS){
+    dbNS.doc("data/users/me/state").set(state).catch(function(){});
+  } else {
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+  }
+}
+
+// A full set() overwrites the whole document with whatever this tab/device
+// has in memory — fine for a single device, but when another tab or phone
+// saves in between two of this tab's saves, that full overwrite silently
+// reverts anything the other one just wrote (this is how a word could look
+// like it jumped multiple boxes in one day: a stale tab's box got written
+// back on top of a newer one). update() merges only the fields in `patch`,
+// leaving anything touched elsewhere untouched, so use it for the frequent,
+// narrow writes (one word's progress, one day's bookkeeping).
+function patchState(patch){
+  if(useDb && dbNS){
+    dbNS.doc("data/users/me/state").update(patch).catch(function(){});
+  } else {
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+  }
+}
+
+async function loadStateAsync(){
+  try{
+    dbNS = (typeof claude !== "undefined" && claude.use) ? await claude.use("db") : null;
+  }catch(e){ dbNS = null; }
+  useDb = !!dbNS;
+
+  if(useDb){
+    try{
+      var snap = await dbNS.doc("data/users/me/state").get();
+      if(snap.exists){
+        // snap.data() comes back frozen (platform-owned) — applyProgress
+        // mutates box/due/learned in place, so work on a plain deep copy.
+        return normalizeState(JSON.parse(JSON.stringify(snap.data())));
+      }
+      var migrated = normalizeState(loadLocalStateIfAny() || {});
+      await dbNS.doc("data/users/me/state").set(migrated);
+      return migrated;
+    }catch(e){
+      useDb = false;
+    }
+  }
+  return normalizeState(loadLocalStateIfAny() || {});
+}
+
+function mergeDeckWords(deckId, newWords){
+  var deck = state.decks[deckId];
+  newWords.forEach(function(w){
+    var key = deckProgKey(deckId, wordKey(w[0]));
+    if(!state.progress[key]) state.progress[key] = freshProgressEntry();
+  });
+  deck.words = newWords;
+  saveState();
+}
+
+function resetDeckProgress(deckId){
+  state.decks[deckId].words.forEach(function(w){
+    state.progress[deckProgKey(deckId, wordKey(w[0]))] = freshProgressEntry();
+  });
+}
+
+var state = null;
+
+// ---- answer matching ----
+function normalize(s){ return s.trim().toLowerCase().replace(/\s+/g," "); }
+function stripParens(s){ return s.replace(/\s*\([^)]*\)\s*/g," ").trim(); }
+function acceptableSet(fullText){
+  var base = stripParens(fullText);
+  var set = {};
+  set[normalize(fullText)] = true;
+  set[normalize(base)] = true;
+  base.split(",").forEach(function(part){
+    part = part.trim();
+    if(part) set[normalize(part)] = true;
+  });
+  return set;
+}
+function hintSeed(fullText){
+  var base = stripParens(fullText);
+  var first = base.split(",")[0].trim();
+  return first.slice(0, Math.min(3, first.length));
+}
+
+// ---- speech ----
+var frenchVoice = null;
+function pickVoice(){
+  try{
+    var voices = speechSynthesis.getVoices();
+    frenchVoice = voices.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf("fr")===0; }) || null;
+  }catch(e){}
+}
+if(typeof speechSynthesis !== "undefined"){
+  pickVoice();
+  speechSynthesis.onvoiceschanged = pickVoice;
+}
+function makeUtterance(text){
+  var u = new SpeechSynthesisUtterance(text);
+  u.lang = "fr-FR";
+  if(frenchVoice) u.voice = frenchVoice;
+  u.rate = 0.92;
+  return u;
+}
+function speakFR(text){
+  try{ speechSynthesis.cancel(); speechSynthesis.speak(makeUtterance(text)); }catch(e){}
+}
+
+// ---- decks / entries / queue ----
+// An "entry" is one word in play: {deckId, kind, word, direction?, progKey?}.
+// `word` is a direct reference into state.decks[deckId].words, so entries
+// can be compared by `===` against the deck's own array when picking
+// distractors from the same row.
+function entryProgKey(e){ return deckProgKey(e.deckId, wordKey(e.word[0])); }
+
+function activeDeckIds(){
+  return state.activeDeck === "__all__" ? Object.keys(state.decks) : [state.activeDeck];
+}
+
+function poolEntries(){
+  var out = [];
+  activeDeckIds().forEach(function(deckId){
+    var deck = state.decks[deckId];
+    deck.words.forEach(function(w){ out.push({deckId:deckId, kind:deck.kind, word:w}); });
+  });
+  return out;
+}
+
+function assignDirection(e){
+  if(e.kind==="word") e.direction = Math.random()<0.5 ? "ru2fr" : "fr2ru";
+}
+
+// conjug word shape: [infinitive, [je,tu,elle,nous,vous,elles], translation].
+// "elle" stands in for il/elle/on and "elles" for ils/elles — French gives
+// them one shared form, so there's no separate il/ils slot to fill.
+var CONJUG_FIELDS = ["je","tu","elle","nous","vous","elles"];
+var CONJUG_IDX = {je:0, tu:1, elle:2, nous:3, vous:4, elles:5};
+var CONJUG_LABELS = {je:"Je", tu:"Tu", elle:"Elle", nous:"Nous", vous:"Vous", elles:"Elles"};
+var CONJUG_PRONOUNS = {je:"je", tu:"tu", elle:"elle", nous:"nous", vous:"vous", elles:"elles"};
+
+function requiredFields(e){
+  if(e.kind==="verb") return ["a","b"];
+  if(e.kind==="conjug") return CONJUG_FIELDS;
+  return ["a"];
+}
+
+// cloze word shape: [phraseWithBlank, answer, distractors(3), translation].
+// The blank is marked "___" in the phrase; distractors are curated per entry
+// (prepositions/articles aren't confusable by spelling the way vocabulary
+// is, so the prefix/suffix similarity scoring doesn't apply here).
+function fieldAnswer(e, field){
+  if(e.kind==="verb") return field==="a" ? e.word[0] : e.word[1];
+  if(e.kind==="cloze") return e.word[1];
+  if(e.kind==="conjug") return e.word[1][CONJUG_IDX[field]];
+  return e.direction==="ru2fr" ? e.word[0] : e.word[1];
+}
+function fieldLabel(e, field){
+  if(e.kind==="verb") return field==="a" ? "Инфинитив" : "Причастие";
+  if(e.kind==="cloze") return "Пропуск";
+  if(e.kind==="conjug") return CONJUG_LABELS[field];
+  return e.direction==="ru2fr" ? "Французский" : "Русский";
+}
+function answerIsFrench(e, field){
+  if(e.kind==="verb") return true;
+  if(e.kind==="cloze") return true;
+  if(e.kind==="conjug") return true;
+  return e.direction==="ru2fr";
+}
+// The audio is always the French side, even when the field she just typed
+// was the Russian translation (direction "fr2ru") — unlike answerIsFrench,
+// which governs the accent-helper row and is about what she *typed*.
+function frenchAudioFor(e, field){
+  if(e.kind==="verb") return fieldAnswer(e, field);
+  // Most cloze prompts are "phrase with ___" — speak it filled in. A few
+  // ("de + le = ?") have no blank to fill, so just speak the answer.
+  if(e.kind==="cloze") return e.word[0].indexOf("___")!==-1 ? e.word[0].replace("___", e.word[1]) : e.word[1];
+  if(e.kind==="conjug") return CONJUG_PRONOUNS[field]+" "+fieldAnswer(e, field);
+  return e.word[0];
+}
+function promptText(e){
+  if(e.kind==="verb") return e.word[2];
+  if(e.kind==="cloze") return e.word[0];
+  if(e.kind==="conjug") return e.word[0];
+  return e.direction==="ru2fr" ? e.word[1] : e.word[0];
+}
+function promptEyebrow(e){
+  if(e.kind==="verb") return "Переведи на французский";
+  if(e.kind==="cloze") return "Вставь пропущенное слово";
+  if(e.kind==="conjug") return "Проспрягай в настоящем времени (présent)";
+  return e.direction==="ru2fr" ? "Переведи на французский" : "Переведи на русский";
+}
+
+function shuffle(arr){
+  for(var i=arr.length-1;i>0;i--){
+    var j = Math.floor(Math.random()*(i+1));
+    var t=arr[i]; arr[i]=arr[j]; arr[j]=t;
+  }
+  return arr;
+}
+
+function buildDueQueue(){
+  var t = todayStr();
+  var due = poolEntries().filter(function(e){
+    var key = entryProgKey(e);
+    // due<=t alone isn't enough: a box-2 word's 1-day interval can land back
+    // on "today" by the date string, and a UTC-vs-local midnight edge can
+    // make todayStr() itself disagree with itself across two reloads the
+    // same real-world day. Already-answered-today is the one check that
+    // can't drift — once a word is in today's daily.words, it's done,
+    // full stop, no matter what its due date says.
+    return state.progress[key].due <= t && !state.daily.words[key];
+  });
+  due.forEach(assignDirection);
+  return shuffle(due.slice());
+}
+
+function dailyWordsInScope(){
+  var ids = activeDeckIds();
+  return Object.keys(state.daily.words).filter(function(k){
+    return ids.some(function(id){ return k.indexOf(id+"::")===0; });
+  });
+}
+function dailyCleanInScope(){
+  var ids = activeDeckIds();
+  return Object.keys(state.daily.cleanWords).filter(function(k){
+    return ids.some(function(id){ return k.indexOf(id+"::")===0; });
+  }).length;
+}
+
+var queue = [];
+var freePractice = false;
+var current = null;          // one entry, see poolEntries()
+var resolved = {};
+var correctFlags = {};
+var hinted = {};
+var mistaken = {};
+var selectedPronounField = null; // matching-mode (conjug, box<=2): the tapped pronoun awaiting a form
+var batchSeen = 0, batchCorrect = 0, batchLearned = 0, batchTotal = 0;
+
+function currentBox(){ return state.progress[entryProgKey(current)].box; }
+
+// builds a {fieldKey: false, ...} object sized to however many fields this
+// entry needs (2 for verbs, 6 for conjugations, 1 otherwise) — the per-round
+// tracking objects below are reset against this instead of a hardcoded a/b.
+function freshFieldFlags(entry){
+  var obj = {};
+  requiredFields(entry).forEach(function(f){ obj[f] = false; });
+  return obj;
+}
+
+function endingSimilarity(a, b){
+  // shared suffix length (case-insensitive) is a decent stand-in for "looks
+  // like it could be the same verb family" — lu/su/cru/vu, craint/couru etc.
+  a = a.toLowerCase(); b = b.toLowerCase();
+  var score = 0, max = Math.min(a.length, b.length);
+  for(var i=1;i<=max;i++){
+    if(a[a.length-i]===b[b.length-i]) score++;
+    else break;
+  }
+  score -= Math.min(2, Math.abs(a.length-b.length));
+  return score;
+}
+
+function startSimilarity(a, b){
+  a = a.toLowerCase(); b = b.toLowerCase();
+  var score = 0, max = Math.min(a.length, b.length);
+  for(var i=0;i<max;i++){
+    if(a[i]===b[i]) score++;
+    else break;
+  }
+  return score;
+}
+
+function distractorScore(correct, candidate){
+  // same starting letter(s) is the strongest "could be this one" signal —
+  // outranks ending similarity, which only breaks ties within that group.
+  return startSimilarity(correct, candidate)*100 + endingSimilarity(correct, candidate);
+}
+
+function distractorsFor(entry, field, correctAnswer){
+  if(entry.kind==="cloze"){
+    var picked = entry.word[2].slice();
+    shuffle(picked);
+    return picked;
+  }
+  var correctNorm = normalize(correctAnswer);
+  var deckWords = state.decks[entry.deckId].words;
+  var seen = {}; var candidates = [];
+  deckWords.forEach(function(w){
+    if(w===entry.word) return;
+    var val = entry.kind==="verb"
+      ? (field==="a" ? w[0] : w[1])
+      : (entry.direction==="ru2fr" ? w[0] : w[1]);
+    var n = normalize(val);
+    if(n===correctNorm || seen[n]) return;
+    seen[n] = true;
+    candidates.push(val);
+  });
+  candidates.sort(function(a,b){
+    return distractorScore(correctAnswer,b) - distractorScore(correctAnswer,a);
+  });
+  // bias toward the most confusable options, but keep a little variety
+  // instead of showing the exact same trio every time this word comes up
+  var pickFrom = candidates.slice(0, Math.min(8, candidates.length));
+  shuffle(pickFrom);
+  return pickFrom.slice(0,3);
+}
+
+// ---- rendering ----
+var cardArea = document.getElementById("cardArea");
+cardArea.innerHTML = '<div class="empty"><p>Загрузка прогресса…</p></div>';
+var statsRow = document.getElementById("statsRow");
+var progressFill = document.getElementById("progressFill");
+
+function renderStats(){
+  var entries = poolEntries();
+  var learnedCount = 0;
+  entries.forEach(function(e){ if(state.progress[entryProgKey(e)].learned) learnedCount++; });
+  var total = entries.length;
+  var doneToday = dailyWordsInScope().length;
+  var frozenTotal = state.daily.totals ? state.daily.totals[state.activeDeck] : undefined;
+  var dueToday = frozenTotal!==undefined ? frozenTotal : (doneToday + queue.length);
+  statsRow.innerHTML =
+    '<div class="chip">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
+    '<div class="chip">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>';
+}
+
+function updateProgressBar(){
+  var pct = batchTotal ? Math.round((batchSeen/batchTotal)*100) : 0;
+  progressFill.style.width = pct+"%";
+}
+
+function startBatch(){
+  batchSeen = 0; batchCorrect = 0; batchLearned = 0;
+  batchTotal = Math.min(BATCH_SIZE, queue.length);
+}
+
+function nextWord(){
+  if(queue.length===0){
+    renderSummary(true);
+    return;
+  }
+  current = queue.shift();
+  resolved = freshFieldFlags(current);
+  correctFlags = freshFieldFlags(current);
+  hinted = freshFieldFlags(current);
+  mistaken = freshFieldFlags(current);
+  selectedPronounField = null;
+  updateProgressBar();
+  renderCard();
+}
+
+function fieldBlock(entry, field){
+  var box = currentBox();
+  var mode = box<=2 ? "choice" : "type";
+  var answer = fieldAnswer(entry, field);
+  var label = fieldLabel(entry, field);
+  var html = '<div class="field" data-field="'+field+'">'+
+    '<div class="field-label"><span>'+label+'</span><span class="field-actions">'+
+      '<button type="button" class="hintbtn" data-field="'+field+'" title="Подсказка (без балла)">?</button>'+
+      (mode==="type" ? '<button type="button" class="revealbtn" data-field="'+field+'" title="Показать ответ (без балла)">👁</button>' : '')+
+    '</span></div>';
+  if(mode==="choice"){
+    var options = shuffle(distractorsFor(entry, field, answer).concat([answer]));
+    html += '<div class="choices" data-group="'+field+'">';
+    options.forEach(function(opt, idx){
+      html += '<button type="button" class="choice-btn" data-field="'+field+'" data-val="'+idx+'" title="'+opt.replace(/"/g,"&quot;")+'">'+opt+'</button>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="type-row">'+
+        '<input class="type-input" id="input-'+field+'" data-field="'+field+'" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Введи и нажми Enter">'+
+      '</div>'+
+      '<span class="reveal-label" data-reveal="'+field+'" hidden></span>'+
+      (answerIsFrench(entry, field) ? '<div class="accent-row" data-accent="'+field+'"></div>' : '');
+  }
+  html += '</div>';
+  return html;
+}
+
+// conjug, box 1-2: tap a pronoun then tap its matching form instead of
+// picking per-field multiple choice — the two columns share one pool of
+// forms, so duplicate forms (je/tu are often identical, e.g. "viens") each
+// get their own button rather than being merged into one.
+function renderMatchHtml(entry){
+  var fields = requiredFields(entry);
+  var pronounsHtml = fields.map(function(f){
+    return '<div class="match-row" data-field="'+f+'">'+
+      '<button type="button" class="choice-btn match-pronoun" data-field="'+f+'">'+fieldLabel(entry,f)+'</button>'+
+      '<button type="button" class="hintbtn" data-field="'+f+'" title="Подсказка (без балла)">?</button>'+
+    '</div>';
+  }).join("");
+  var forms = shuffle(fields.map(function(f){ return fieldAnswer(entry, f); }).slice());
+  var formsHtml = forms.map(function(form){
+    return '<button type="button" class="choice-btn match-form">'+form+'</button>';
+  }).join("");
+  return '<div class="match-col">'+pronounsHtml+'</div><div class="match-col">'+formsHtml+'</div>';
+}
+
+function bindMatchHandlers(entry){
+  Array.prototype.forEach.call(cardArea.querySelectorAll(".match-pronoun"), function(btn){
+    btn.onclick = function(){
+      var field = btn.dataset.field;
+      if(resolved[field]) return;
+      selectedPronounField = field;
+      Array.prototype.forEach.call(cardArea.querySelectorAll(".match-pronoun"), function(b){ b.classList.remove("selected"); });
+      btn.classList.add("selected");
+    };
+  });
+  Array.prototype.forEach.call(cardArea.querySelectorAll(".match-form"), function(btn){
+    btn.onclick = function(){
+      if(btn.disabled || !selectedPronounField) return;
+      var field = selectedPronounField;
+      var needed = fieldAnswer(entry, field);
+      if(normalize(btn.textContent) === normalize(needed)){
+        resolved[field] = true; correctFlags[field] = true;
+        btn.disabled = true; btn.classList.add("correct");
+        var pBtn = cardArea.querySelector('.match-pronoun[data-field="'+field+'"]');
+        pBtn.disabled = true; pBtn.classList.remove("selected"); pBtn.classList.add("correct");
+        var hintBtn = cardArea.querySelector('.match-row[data-field="'+field+'"] .hintbtn');
+        var frenchAudio = frenchAudioFor(entry, field);
+        turnIntoReplay(hintBtn, frenchAudio);
+        speakFR(frenchAudio);
+        selectedPronounField = null;
+        if(requiredFields(entry).every(function(f){ return resolved[f]; })) finishWordRound();
+      } else {
+        mistaken[field] = true;
+        btn.classList.add("wrong");
+        setTimeout(function(){ btn.classList.remove("wrong"); }, 500);
+      }
+    };
+  });
+  Array.prototype.forEach.call(cardArea.querySelectorAll(".match-row .hintbtn"), function(hintBtn){
+    hintBtn.onclick = function(){
+      var field = hintBtn.closest(".match-row").dataset.field;
+      if(hinted[field] || resolved[field]) return;
+      hinted[field] = true;
+      hintBtn.disabled = true;
+      var answer = fieldAnswer(entry, field);
+      var wrongBtns = Array.prototype.filter.call(cardArea.querySelectorAll(".match-form:not(:disabled)"), function(b){
+        return normalize(b.textContent) !== normalize(answer);
+      });
+      if(wrongBtns.length){
+        var pick = wrongBtns[Math.floor(Math.random()*wrongBtns.length)];
+        pick.disabled = true;
+        pick.classList.add("removed");
+      }
+    };
+  });
+}
+
+function renderCard(){
+  var box = currentBox();
+  var dots = "";
+  for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
+  var fields = requiredFields(current);
+  var isMatching = current.kind==="conjug" && box<=2;
+  var fieldsHtml = isMatching ? renderMatchHtml(current) : fields.map(function(f){ return fieldBlock(current, f); }).join("");
+  var deckName = state.decks[current.deckId].name;
+  var translationLine = current.kind==="cloze" ? current.word[3] : (current.kind==="conjug" ? current.word[2] : null);
+
+  var html = ''+
+    '<div class="eyebrow"><span>'+promptEyebrow(current)+(freePractice?' · свободно':'')+'</span><span class="box-dots">'+dots+'</span></div>'+
+    '<div class="ruword">'+promptText(current)+'</div>'+
+    (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
+    '<div class="'+(isMatching?'match-wrap':'fields-row')+'">'+fieldsHtml+'</div>'+
+    (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deckName+'</div>' : '');
+  cardArea.innerHTML = html;
+
+  if(isMatching){
+    bindMatchHandlers(current);
+    return;
+  }
+
+  fields.forEach(function(field){
+    var answer = fieldAnswer(current, field);
+    var mode = box<=2 ? "choice" : "type";
+    var hintBtn = cardArea.querySelector('.hintbtn[data-field="'+field+'"]');
+
+    if(mode==="choice"){
+      var group = cardArea.querySelector('.choices[data-group="'+field+'"]');
+      Array.prototype.forEach.call(group.querySelectorAll(".choice-btn"), function(btn){
+        btn.onclick = function(){ attemptField(field, btn.textContent, btn); };
+      });
+      hintBtn.onclick = function(){
+        if(hinted[field] || resolved[field]) return;
+        hinted[field] = true;
+        hintBtn.disabled = true;
+        var wrongBtns = Array.prototype.filter.call(group.querySelectorAll(".choice-btn:not(.removed)"), function(b){
+          return normalize(b.textContent)!==normalize(answer);
+        });
+        if(wrongBtns.length){
+          var pick = wrongBtns[Math.floor(Math.random()*wrongBtns.length)];
+          pick.classList.add("removed");
+          pick.disabled = true;
+        }
+      };
+    } else {
+      var input = document.getElementById("input-"+field);
+      if(answerIsFrench(current, field)){
+        var letters = "é è ê ë à â ô û ù ç î ï œ".split(" ");
+        var accentRow = cardArea.querySelector('[data-accent="'+field+'"]');
+        letters.forEach(function(ch){
+          var b = document.createElement("button");
+          b.className = "accent-key"; b.type = "button"; b.textContent = ch;
+          b.onclick = function(){
+            var start = input.selectionStart||input.value.length, end = input.selectionEnd||input.value.length;
+            input.value = input.value.slice(0,start)+ch+input.value.slice(end);
+            input.focus();
+            input.selectionStart = input.selectionEnd = start+ch.length;
+          };
+          accentRow.appendChild(b);
+        });
+      }
+      input.addEventListener("input", function(){ input.classList.remove("wrong"); });
+      input.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); attemptField(field, input.value, null); } });
+      hintBtn.onclick = function(){
+        if(hinted[field] || resolved[field]) return;
+        hinted[field] = true;
+        hintBtn.disabled = true;
+        input.placeholder = "начинается на: "+hintSeed(answer)+"…";
+      };
+      var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
+      revealBtn.onclick = function(){ revealField(field); };
+    }
+  });
+
+  // auto-focus the first empty typing field, if any
+  var firstInput = cardArea.querySelector(".type-input");
+  if(firstInput) firstInput.focus();
+}
+
+function focusOtherField(field){
+  // moves to the next unresolved field after this one (wrapping around) —
+  // generalized beyond "the other of exactly two fields" for 6-field conjugations.
+  var fields = requiredFields(current);
+  var idx = fields.indexOf(field);
+  for(var step=1; step<=fields.length; step++){
+    var f = fields[(idx+step)%fields.length];
+    if(!resolved[f]){
+      var inp = document.getElementById("input-"+f);
+      if(inp){ inp.focus(); return; }
+    }
+  }
+}
+
+function attemptField(field, rawValue, clickedBtn){
+  if(resolved[field]) return;
+  var answer = fieldAnswer(current, field);
+  var ok = acceptableSet(answer)[normalize(rawValue)] === true;
+  var mode = currentBox()<=2 ? "choice" : "type";
+
+  if(!ok){
+    // wrong attempt: mark it, give feedback, but let her try again —
+    // audio only ever plays for the correct word, whenever it's finally picked.
+    mistaken[field] = true;
+    if(mode==="choice" && clickedBtn){
+      clickedBtn.classList.add("wrong");
+      clickedBtn.disabled = true;
+    } else if(mode==="type"){
+      document.getElementById("input-"+field).classList.add("wrong");
+    }
+    return;
+  }
+
+  resolved[field] = true;
+  correctFlags[field] = true;
+
+  var hintBtn = cardArea.querySelector('.hintbtn[data-field="'+field+'"]');
+  if(mode==="choice"){
+    var group = cardArea.querySelector('.choices[data-group="'+field+'"]');
+    Array.prototype.forEach.call(group.querySelectorAll(".choice-btn"), function(b){ b.disabled = true; });
+    clickedBtn.classList.remove("wrong");
+    clickedBtn.classList.add("correct");
+  } else {
+    var input = document.getElementById("input-"+field);
+    input.classList.remove("wrong");
+    input.classList.add("correct");
+    input.disabled = true;
+    focusOtherField(field);
+  }
+  var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
+  if(revealBtn) revealBtn.disabled = true;
+  var frenchAudio = frenchAudioFor(current, field);
+  turnIntoReplay(hintBtn, frenchAudio);
+  speakFR(frenchAudio);
+
+  if(requiredFields(current).every(function(f){ return resolved[f]; })) finishWordRound();
+}
+
+function revealField(field){
+  // "I have no idea" — show the spelling, but she still has to type it
+  // herself to move on. Counts the same as a hint: box doesn't advance.
+  if(hinted[field] || resolved[field]) return;
+  hinted[field] = true;
+  var answer = fieldAnswer(current, field);
+
+  var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
+  if(revealBtn) revealBtn.disabled = true;
+  var hintBtn = cardArea.querySelector('.hintbtn[data-field="'+field+'"]');
+  if(hintBtn) hintBtn.disabled = true;
+  var label = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]');
+  if(label){ label.textContent = "Ответ: "+answer; label.hidden = false; }
+}
+
+function turnIntoReplay(btn, answer){
+  if(!btn) return;
+  btn.onclick = null;
+  btn.disabled = false;
+  btn.className = "speakmini";
+  btn.title = "Повторить произношение";
+  btn.dataset.word = answer;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg>';
+}
+
+cardArea.addEventListener("click", function(e){
+  var btn = e.target.closest && e.target.closest(".speakmini");
+  if(btn) speakFR(btn.dataset.word);
+});
+
+function finishWordRound(){
+  var fields = requiredFields(current);
+  var clean = !fields.some(function(f){ return mistaken[f] || hinted[f]; });
+  applyProgress(clean);
+
+  batchSeen++;
+  if(clean) batchCorrect++;
+  if(!freePractice){
+    var key = entryProgKey(current);
+    state.daily.words[key] = true;
+    if(clean) state.daily.cleanWords[key] = true;
+    var dailyPatch = {daily:{date: state.daily.date, words:{}}};
+    dailyPatch.daily.words[key] = true;
+    if(clean){ dailyPatch.daily.cleanWords = {}; dailyPatch.daily.cleanWords[key] = true; }
+    patchState(dailyPatch);
+  }
+  updateProgressBar();
+  renderStats();
+
+  var atBoundary = batchSeen>=BATCH_SIZE || queue.length===0;
+  var cont = document.createElement("button");
+  cont.className = "btn primary";
+  cont.style.marginTop = "4px";
+  cont.textContent = atBoundary ? "Итог" : "Следующее слово";
+  cont.onclick = function(){
+    if(atBoundary) renderSummary(queue.length===0);
+    else nextWord();
+  };
+  cardArea.appendChild(cont);
+}
+
+function applyProgress(clean){
+  if(freePractice) return;
+  var key = entryProgKey(current);
+  var p = state.progress[key];
+  var wasLearned = p.learned;
+
+  if(clean){
+    p.box = Math.min(p.box+1, 5);
+    if(p.box===5 && wasLearned){
+      p.interval = Math.min(Math.round((p.interval||16)*1.6), 60);
+    } else {
+      p.interval = INTERVALS[p.box];
+    }
+    p.due = addDays(todayStr(), p.interval);
+    p.learned = p.box>=5;
+  } else {
+    // needed a hint or a wrong guess first: she still ended up recalling it
+    // herself, so the box doesn't drop — it just comes back tomorrow instead
+    // of moving further out (and instead of sitting stuck on "today" forever
+    // if she doesn't reopen the trainer again the same day).
+    p.due = addDays(todayStr(), 1);
+  }
+  if(!wasLearned && p.learned) batchLearned++;
+  var patch = {progress:{}};
+  patch.progress[key] = p;
+  patchState(patch);
+}
+
+function renderSummary(isFinal){
+  renderStats();
+  var pct = batchSeen ? Math.round((batchCorrect/batchSeen)*100) : 0;
+  var title = isFinal ? "На сегодня всё" : "Мини-тренировка пройдена";
+  var text = batchSeen
+    ? 'За эти '+batchSeen+' слов: '+pct+'% без единой ошибки или подсказки'+(batchLearned?', выучено новых: '+batchLearned:'')+'.'
+    : 'Пока нечего повторять — всё уже отвечено сегодня.';
+  var remaining = queue.length;
+  var dayWords = dailyWordsInScope().length;
+  var dayClean = dailyCleanInScope();
+  var dayPct = dayWords ? Math.round((dayClean/dayWords)*100) : 0;
+  var dayText = dayWords
+    ? 'Всего сегодня: '+dayWords+' слов, '+dayPct+'% без единой ошибки или подсказки.'
+    : '';
+  var html = '<div class="empty">'+
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>'+
+    '<h3>'+title+'</h3>'+
+    '<p>'+text+(!isFinal ? ' Осталось на сегодня: '+remaining+'.' : '')+'</p>'+
+    (dayText ? '<p class="hint">'+dayText+'</p>' : '')+
+    (!isFinal && remaining>0
+      ? '<button class="btn primary" id="continueBtn">Продолжить</button>'
+      : '<button class="btn primary" id="practiceMoreBtn">Тренироваться ещё (вне графика)</button>')+
+  '</div>';
+  cardArea.innerHTML = html;
+  var continueBtn = document.getElementById("continueBtn");
+  if(continueBtn) continueBtn.onclick = function(){ startBatch(); nextWord(); };
+  var practiceBtn = document.getElementById("practiceMoreBtn");
+  if(practiceBtn) practiceBtn.onclick = function(){
+    freePractice = true;
+    queue = poolEntries();
+    queue.forEach(assignDirection);
+    shuffle(queue);
+    startBatch();
+    nextWord();
+  };
+}
+
+function updateFooterNote(){
+  var note = document.getElementById("footerNote");
+  if(state.activeDeck==="__all__"){
+    note.textContent = "Все наборы вперемешку · мини-тренировка — 10 слов, потом промежуточный итог";
+    return;
+  }
+  var deck = state.decks[state.activeDeck];
+  var count = deck.words.length;
+  note.textContent = deck.kind==="verb"
+    ? count+' глаголов · инфинитив и причастие прошедшего времени отвечаются вместе · мини-тренировка — 10 слов, потом промежуточный итог'
+    : deck.kind==="cloze"
+    ? count+' фраз · вставь пропущенный предлог/артикль · мини-тренировка — 10 слов, потом промежуточный итог'
+    : deck.kind==="conjug"
+    ? count+' глаголов · все 6 форм présent отвечаются вместе · мини-тренировка — 10 слов, потом промежуточный итог'
+    : count+' слов · перевод в обе стороны вперемешку · мини-тренировка — 10 слов, потом промежуточный итог';
+}
+
+function startSession(){
+  freePractice = false;
+  if(!state.daily || state.daily.date !== todayStr() || !state.daily.words){
+    // "Сегодня" tracks the calendar day, not the browser tab: a reload or a
+    // different device must see the same set, so it lives in state.daily.
+    // This reset must run BEFORE buildDueQueue(), which checks daily.words
+    // to exclude words already answered today — on yesterday's stale
+    // daily.words, that check would wrongly suppress today's first pass.
+    state.daily = {date: todayStr(), words: {}, cleanWords: {}, totals: {}};
+    saveState();
+  }
+  if(!state.daily.cleanWords) state.daily.cleanWords = {};
+  if(!state.daily.totals) state.daily.totals = {};
+  queue = buildDueQueue();
+  // The "Сегодня X/Y" target is frozen per training mode the first time
+  // it's opened each day, so reopening/reloading later the same day shows
+  // the same Y — it only ever grows if more got done than it allowed for
+  // (never shrinks, never lets done exceed it).
+  var scopeKey = state.activeDeck;
+  var doneNow = dailyWordsInScope().length;
+  var frozen = state.daily.totals[scopeKey];
+  var changedTotal = false;
+  if(frozen===undefined){
+    state.daily.totals[scopeKey] = doneNow + queue.length;
+    changedTotal = true;
+  } else if(doneNow > frozen){
+    state.daily.totals[scopeKey] = doneNow;
+    changedTotal = true;
+  }
+  if(changedTotal){
+    var totalsPatch = {};
+    totalsPatch[scopeKey] = state.daily.totals[scopeKey];
+    patchState({daily:{date: state.daily.date, totals: totalsPatch}});
+  }
+  updateFooterNote();
+  startBatch();
+  renderStats();
+  if(queue.length===0){ renderSummary(true); return; }
+  nextWord();
+}
+
+// ---- training-mode deck switcher ----
+var deckModeSelect = document.getElementById("deckModeSelect");
+function populateDeckModeSelect(){
+  var opts = Object.keys(state.decks).map(function(id){
+    return '<option value="'+id+'"'+(state.activeDeck===id?' selected':'')+'>'+state.decks[id].name+'</option>';
+  }).join("");
+  opts += '<option value="__all__"'+(state.activeDeck==="__all__"?' selected':'')+'>Всё вместе</option>';
+  deckModeSelect.innerHTML = opts;
+}
+deckModeSelect.onchange = function(){
+  state.activeDeck = deckModeSelect.value;
+  patchState({activeDeck: state.activeDeck});
+  startSession();
+};
+
+// ---- full stats table ----
+function daysBetween(fromStr, toStr){
+  var a = new Date(fromStr+"T00:00:00"), b = new Date(toStr+"T00:00:00");
+  return Math.round((b-a)/86400000);
+}
+
+function renderStatsTable(){
+  var today = todayStr();
+  var entries = poolEntries();
+  var learnedCount = 0, counts = {1:0,2:0,3:0,4:0,5:0};
+  entries.forEach(function(e){
+    var p = state.progress[entryProgKey(e)];
+    counts[p.box] = (counts[p.box]||0)+1;
+    if(p.learned) learnedCount++;
+  });
+  document.getElementById("statsSummary").innerHTML =
+    '<div class="chip">Выучено <b>'+learnedCount+'/'+entries.length+'</b></div>'+
+    '<div class="chip">Новые (ур. 1) <b>'+(counts[1]||0)+'</b></div>'+
+    '<div class="chip">В процессе (ур. 2-4) <b>'+((counts[2]||0)+(counts[3]||0)+(counts[4]||0))+'</b></div>';
+
+  var rows = entries.map(function(e){ return {e:e, p: state.progress[entryProgKey(e)]}; });
+  rows.sort(function(a,b){
+    if(a.p.box !== b.p.box) return a.p.box - b.p.box;
+    return a.e.word[0].localeCompare(b.e.word[0]);
+  });
+
+  var html = "";
+  rows.forEach(function(r){
+    var box = r.p.box;
+    var dots = "";
+    for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
+    var dueLabel;
+    if(r.p.due <= today) dueLabel = '<span class="due-today">сегодня</span>';
+    else {
+      var d = daysBetween(today, r.p.due);
+      dueLabel = 'через '+d+' '+(d===1?'день':(d<5?'дня':'дней'));
+    }
+    var wordsLine = r.e.kind==="verb"
+      ? '<span class="inf">'+r.e.word[0]+'</span><span class="sep">→</span>'+r.e.word[1]+'<span class="sep">—</span>'+r.e.word[2]
+      : r.e.kind==="conjug"
+      ? '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[2]
+      : '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[1];
+    var deckTag = state.activeDeck==="__all__" ? '<span class="sep">·</span>'+state.decks[r.e.deckId].name : '';
+    html += '<div class="stat-row'+(r.p.learned?' is-learned':'')+'">'+
+      '<div class="words">'+wordsLine+deckTag+'</div>'+
+      '<div class="meta"><span class="box-dots">'+dots+'</span><span>'+dueLabel+'</span></div>'+
+    '</div>';
+  });
+  document.getElementById("statsTable").innerHTML = html;
+}
+
+var statsOverlay = document.getElementById("statsOverlay");
+document.getElementById("statsBtn").onclick = function(){
+  if(!state) return;
+  renderStatsTable();
+  statsOverlay.hidden = false;
+};
+document.getElementById("closeStatsBtn").onclick = function(){ statsOverlay.hidden = true; };
+statsOverlay.addEventListener("click", function(e){ if(e.target===statsOverlay) statsOverlay.hidden = true; });
+
+// ---- word-list / deck management modal ----
+var editOverlay = document.getElementById("editOverlay");
+var editArea = document.getElementById("editArea");
+var editDeckSelect = document.getElementById("editDeckSelect");
+var newDeckPanel = document.getElementById("newDeckPanel");
+var editDeckBody = document.getElementById("editDeckBody");
+var editFormatHint = document.getElementById("editFormatHint");
+
+function populateEditDeckSelect(selectId){
+  var opts = Object.keys(state.decks).map(function(id){
+    return '<option value="'+id+'">'+state.decks[id].name+'</option>';
+  }).join("");
+  opts += '<option value="__new__">+ Новый набор</option>';
+  editDeckSelect.innerHTML = opts;
+  editDeckSelect.value = selectId;
+}
+
+function showDeckForEdit(deckId){
+  if(deckId==="__new__"){
+    newDeckPanel.hidden = false;
+    editDeckBody.hidden = true;
+    return;
+  }
+  newDeckPanel.hidden = true;
+  editDeckBody.hidden = false;
+  var deck = state.decks[deckId];
+  editFormatHint.textContent = deck.kind==="verb"
+    ? "Формат: infinitif;participe passé;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
+    : deck.kind==="cloze"
+    ? "Формат: фраза с ___;ответ;ловушка1|ловушка2|ловушка3;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
+    : deck.kind==="conjug"
+    ? "Формат: infinitif;je|tu|il|nous|vous|ils;перевод — по одной строке (6 форм через |, в этом порядке). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
+    : "Формат: слово;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится.";
+  editArea.value = deck.words.map(function(w){
+    if(deck.kind==="cloze") return [w[0], w[1], w[2].join("|"), w[3]].join(";");
+    if(deck.kind==="conjug") return [w[0], w[1].join("|"), w[2]].join(";");
+    return w.join(";");
+  }).join("\n");
+}
+
+editDeckSelect.onchange = function(){ showDeckForEdit(editDeckSelect.value); };
+
+document.getElementById("editBtn").onclick = function(){
+  if(!state) return;
+  var startId = state.activeDeck==="__all__" ? Object.keys(state.decks)[0] : state.activeDeck;
+  populateEditDeckSelect(startId);
+  showDeckForEdit(startId);
+  editOverlay.hidden = false;
+};
+document.getElementById("cancelEditBtn").onclick = function(){ editOverlay.hidden = true; };
+editOverlay.addEventListener("click", function(e){ if(e.target===editOverlay) editOverlay.hidden = true; });
+
+document.getElementById("createDeckBtn").onclick = function(){
+  var nameInput = document.getElementById("newDeckName");
+  var name = nameInput.value.trim();
+  if(!name) return;
+  var kind = document.querySelector('input[name="newDeckKind"]:checked').value;
+  var id = "deck-"+Date.now().toString(36);
+  state.decks[id] = {name:name, kind:kind, words:[]};
+  saveState();
+  populateDeckModeSelect();
+  populateEditDeckSelect(id);
+  nameInput.value = "";
+  showDeckForEdit(id);
+};
+
+document.getElementById("saveEditBtn").onclick = function(){
+  var deckId = editDeckSelect.value;
+  if(deckId==="__new__") return;
+  var kind = state.decks[deckId].kind;
+  var lines = editArea.value.split("\n").map(function(l){ return l.trim(); }).filter(Boolean);
+  var words = lines.map(function(l){
+    var parts = l.split(";").map(function(p){ return p.trim(); });
+    if(kind==="verb") return [parts[0]||"", parts[1]||"", parts[2]||""];
+    if(kind==="cloze") return [parts[0]||"", parts[1]||"", (parts[2]||"").split("|").map(function(d){ return d.trim(); }).filter(Boolean), parts[3]||""];
+    if(kind==="conjug") return [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||""];
+    return [parts[0]||"", parts[1]||""];
+  }).filter(function(w){ return w[0]; });
+  if(words.length){
+    mergeDeckWords(deckId, words);
+    editOverlay.hidden = true;
+    startSession();
+  }
+};
+
+var resetArmed = false, resetTimer = null;
+document.getElementById("resetProgressBtn").onclick = function(e){
+  var deckId = editDeckSelect.value;
+  if(deckId==="__new__") return;
+  if(!resetArmed){
+    resetArmed = true;
+    e.target.textContent = "Точно сбросить прогресс этого набора? Нажми ещё раз";
+    resetTimer = setTimeout(function(){ resetArmed=false; e.target.textContent="Сбросить прогресс (этот набор)"; }, 3000);
+    return;
+  }
+  clearTimeout(resetTimer);
+  resetArmed = false;
+  e.target.textContent = "Сбросить прогресс (этот набор)";
+  resetDeckProgress(deckId);
+  saveState();
+  editOverlay.hidden = true;
+  startSession();
+};
+
+var deleteArmed = false, deleteTimer = null;
+document.getElementById("deleteDeckBtn").onclick = function(e){
+  var deckId = editDeckSelect.value;
+  if(deckId==="__new__") return;
+  if(Object.keys(state.decks).length<=1){
+    e.target.textContent = "Это единственный набор — нечего удалять";
+    setTimeout(function(){ e.target.textContent="Удалить этот набор"; }, 2500);
+    return;
+  }
+  if(!deleteArmed){
+    deleteArmed = true;
+    e.target.textContent = "Точно удалить «"+state.decks[deckId].name+"»? Нажми ещё раз";
+    deleteTimer = setTimeout(function(){ deleteArmed=false; e.target.textContent="Удалить этот набор"; }, 3000);
+    return;
+  }
+  clearTimeout(deleteTimer);
+  deleteArmed = false;
+  e.target.textContent = "Удалить этот набор";
+  delete state.decks[deckId];
+  Object.keys(state.progress).forEach(function(k){
+    if(k.indexOf(deckId+"::")===0) delete state.progress[k];
+  });
+  if(state.activeDeck===deckId) state.activeDeck = Object.keys(state.decks)[0];
+  saveState();
+  populateDeckModeSelect();
+  editOverlay.hidden = true;
+  startSession();
+};
+
+loadStateAsync().then(function(loaded){
+  state = loaded;
+  populateDeckModeSelect();
+  startSession();
+});
+})();
+</script>

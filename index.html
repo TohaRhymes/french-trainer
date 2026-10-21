@@ -243,6 +243,9 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
       <button class="iconbtn" id="editBtn" title="Наборы слов" aria-label="Наборы слов">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 13.5a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V20a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1H4a2 2 0 110-4h.09a1.7 1.7 0 001.56-1 1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.87.34H10a1.7 1.7 0 001-1.56V4a2 2 0 114 0v.09a1.7 1.7 0 001 1.56 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87V10a1.7 1.7 0 001.56 1H20a2 2 0 110 4h-.09a1.7 1.7 0 00-1.56 1z"/></svg>
       </button>
+      <button class="iconbtn" id="catalogBtn" title="Доступные наборы" aria-label="Доступные наборы">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      </button>
     </div>
   </div>
 
@@ -263,6 +266,18 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
     <h2>Статистика по словам</h2>
     <div class="stats" id="statsSummary"></div>
     <div class="stats-list" id="statsTable"></div>
+  </div>
+</div>
+
+<div class="overlay" id="catalogOverlay" hidden>
+  <div class="modal">
+    <button type="button" class="modal-close" id="closeCatalogBtn" title="Закрыть">✕</button>
+    <h2>Доступные наборы</h2>
+    <p class="hint">Отметь, какие наборы добавить себе — дальше это твоя собственная копия: можно добавлять туда свои слова, у других они не появятся.</p>
+    <div id="catalogList"></div>
+    <div class="row">
+      <button class="btn primary" id="addCatalogBtn">Добавить выбранные</button>
+    </div>
   </div>
 </div>
 
@@ -304,10 +319,18 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 "use strict";
 
 // ---- default decks ----
+// autoAdd:true decks land in every user's own `decks` automatically
+// (first load or backfill on an existing user) — this is the original
+// fixed set everyone always had. Anything added later should default to
+// opt-in instead (no autoAdd, or autoAdd:false): it only shows up in the
+// "Доступные наборы" catalog until the user explicitly adopts it, so a
+// new deck can be shipped without silently appearing in decks a user
+// (or a friend's independent copy) never asked for.
 var DEFAULT_DECKS = {
   "passe-compose": {
     name: "Passé Composé",
     kind: "verb",
+    autoAdd: true,
     words: [
       ["Lire","lu","Читать"],["Voir","vu","Видеть"],["Boire","bu","Пить"],
       ["Entendre","entendu","Слышать"],["Attendre","attendu","Ждать"],["Répondre","répondu","Отвечать"],
@@ -329,6 +352,7 @@ var DEFAULT_DECKS = {
   "transport-ch": {
     name: "Транспорт",
     kind: "word",
+    autoAdd: true,
     words: [
       ["l'heure de pointe","час пик"],
       ["le trottoir","тротуар"],
@@ -376,6 +400,7 @@ var DEFAULT_DECKS = {
   "prepositions-ch": {
     name: "Предлоги и артикли",
     kind: "cloze",
+    autoAdd: true,
     words: [
       ["___ gauche","à",["de","en","dans"],"налево"],
       ["___ droite","à",["de","en","dans"],"направо"],
@@ -407,6 +432,7 @@ var DEFAULT_DECKS = {
   "conjugaison-ch": {
     name: "Спряжения (présent)",
     kind: "conjug",
+    autoAdd: true,
     words: [
       ["être",["suis","es","est","sommes","êtes","sont"],"быть"],
       ["avoir",["ai","as","a","avons","avez","ont"],"иметь"],
@@ -476,12 +502,15 @@ function normalizeState(raw){
     if(!s.daily.cleanWords) s.daily.cleanWords = {};
     if(!s.daily.totals) s.daily.totals = {};
     s.activeDeck = "__all__";
-    // Backfill any default deck this saved state doesn't have yet (e.g. a
-    // deck added to DEFAULT_DECKS after this user's first load) — without
-    // this, a brand-new default deck only ever shows up for users whose
-    // state hasn't been created yet, never for an already-migrated one.
+    // Backfill any autoAdd default deck this saved state doesn't have yet
+    // (e.g. one of the original decks added to DEFAULT_DECKS after this
+    // user's first load) — without this, a brand-new autoAdd deck only
+    // ever shows up for users whose state hasn't been created yet, never
+    // for an already-migrated one. Non-autoAdd (opt-in/catalog) decks are
+    // deliberately NOT backfilled here — they only appear via the
+    // "Доступные наборы" picker (see availableDeckIds()/adoptDeck()).
     Object.keys(DEFAULT_DECKS).forEach(function(deckId){
-      if(!s.decks[deckId]) s.decks[deckId] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
+      if(DEFAULT_DECKS[deckId].autoAdd && !s.decks[deckId]) s.decks[deckId] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
     });
     Object.keys(s.decks).forEach(function(deckId){
       s.decks[deckId].words.forEach(function(w){
@@ -503,13 +532,16 @@ function normalizeState(raw){
   transport.words.forEach(function(w){
     newProgress[deckProgKey("transport-ch", wordKey(w[0]))] = freshProgressEntry();
   });
-  // Any other default deck beyond passe-compose/transport-ch (added after
-  // this legacy migration path was written) gets seeded fresh too, the same
-  // way transport-ch does — otherwise a brand-new user (nothing in db/
-  // localStorage yet) only ever sees the two oldest decks.
+  // Any other autoAdd default deck beyond passe-compose/transport-ch (added
+  // after this legacy migration path was written) gets seeded fresh too, the
+  // same way transport-ch does — otherwise a brand-new user (nothing in db/
+  // localStorage yet) only ever sees the two oldest decks. Non-autoAdd decks
+  // are skipped here too — they're opt-in via the catalog picker, same rule
+  // as the already-migrated branch above.
   var extraDecks = {};
   Object.keys(DEFAULT_DECKS).forEach(function(deckId){
     if(deckId==="passe-compose" || deckId==="transport-ch") return;
+    if(!DEFAULT_DECKS[deckId].autoAdd) return;
     var deck = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
     deck.words.forEach(function(w){
       newProgress[deckProgKey(deckId, wordKey(w[0]))] = freshProgressEntry();
@@ -606,6 +638,25 @@ function resetDeckProgress(deckId){
   state.decks[deckId].words.forEach(function(w){
     state.progress[deckProgKey(deckId, wordKey(w[0]))] = freshProgressEntry();
   });
+}
+
+// ---- deck catalog (opt-in decks from DEFAULT_DECKS not yet adopted) ----
+function availableDeckIds(){
+  return Object.keys(DEFAULT_DECKS).filter(function(id){ return !state.decks[id]; });
+}
+function kindLabel(kind){
+  return kind==="verb" ? "глаголов" : kind==="cloze" ? "фраз" : kind==="conjug" ? "спряжений" : "слов";
+}
+function adoptDeck(deckId){
+  if(state.decks[deckId]) return;
+  var deck = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
+  deck.words.forEach(function(w){
+    var key = deckProgKey(deckId, wordKey(w[0]));
+    if(!state.progress[key]) state.progress[key] = freshProgressEntry();
+  });
+  state.decks[deckId] = deck;
+  saveState();
+  populateDeckModeSelect();
 }
 
 var state = null;
@@ -1393,6 +1444,41 @@ document.getElementById("statsBtn").onclick = function(){
 };
 document.getElementById("closeStatsBtn").onclick = function(){ statsOverlay.hidden = true; };
 statsOverlay.addEventListener("click", function(e){ if(e.target===statsOverlay) statsOverlay.hidden = true; });
+
+// ---- deck catalog modal ----
+var catalogOverlay = document.getElementById("catalogOverlay");
+function renderCatalogList(){
+  var ids = availableDeckIds();
+  var list = document.getElementById("catalogList");
+  var addBtn = document.getElementById("addCatalogBtn");
+  if(ids.length===0){
+    list.innerHTML = '<p class="hint">Новых наборов пока нет — у тебя уже есть всё, что есть в каталоге.</p>';
+    addBtn.hidden = true;
+    return;
+  }
+  addBtn.hidden = false;
+  list.innerHTML = ids.map(function(id){
+    var d = DEFAULT_DECKS[id];
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--border);">'+
+      '<input type="checkbox" value="'+id+'" class="catalog-check">'+
+      '<span>'+d.name+' <span class="hint">('+d.words.length+' '+kindLabel(d.kind)+')</span></span>'+
+    '</label>';
+  }).join("");
+}
+document.getElementById("catalogBtn").onclick = function(){
+  if(!state) return;
+  renderCatalogList();
+  catalogOverlay.hidden = false;
+};
+document.getElementById("closeCatalogBtn").onclick = function(){ catalogOverlay.hidden = true; };
+catalogOverlay.addEventListener("click", function(e){ if(e.target===catalogOverlay) catalogOverlay.hidden = true; });
+document.getElementById("addCatalogBtn").onclick = function(){
+  var checked = Array.prototype.filter.call(document.querySelectorAll(".catalog-check"), function(cb){ return cb.checked; });
+  if(!checked.length) return;
+  checked.forEach(function(cb){ adoptDeck(cb.value); });
+  renderCatalogList();
+  if(state.activeDeck==="__all__") startSession();
+};
 
 // ---- word-list / deck management modal ----
 var editOverlay = document.getElementById("editOverlay");

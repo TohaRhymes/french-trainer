@@ -1365,21 +1365,7 @@ function renderSummary(isFinal){
 }
 
 function updateFooterNote(){
-  var note = document.getElementById("footerNote");
-  if(state.activeDeck==="__all__"){
-    note.hidden = true;
-    return;
-  }
-  note.hidden = false;
-  var deck = state.decks[state.activeDeck];
-  var count = deck.words.length;
-  note.textContent = deck.kind==="verb"
-    ? count+' глаголов · инфинитив и причастие прошедшего времени отвечаются вместе · мини-тренировка — 10 слов, потом промежуточный итог'
-    : deck.kind==="cloze"
-    ? count+' фраз · вставь пропущенный предлог/артикль · мини-тренировка — 10 слов, потом промежуточный итог'
-    : deck.kind==="conjug"
-    ? count+' глаголов · все 6 форм présent отвечаются вместе · мини-тренировка — 10 слов, потом промежуточный итог'
-    : count+' слов · перевод в обе стороны вперемешку · мини-тренировка — 10 слов, потом промежуточный итог';
+  document.getElementById("footerNote").hidden = true;
 }
 
 function startSession(){

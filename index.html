@@ -192,6 +192,14 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .empty svg{width:46px;height:46px;color:var(--accent-2);}
 .empty p{color:var(--ink-muted);font-size:.92rem;max-width:34ch;}
 
+.summary-stats{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;}
+.summary-stat{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.summary-stat b{font-family:"Fraunces",Georgia,serif;font-size:1.9rem;font-weight:600;color:var(--ink);line-height:1;}
+.summary-stat span{font-size:.76rem;color:var(--ink-muted);}
+.summary-footer{font-size:.84rem;color:var(--ink-muted);margin:0;}
+.summary-remaining{font-size:.86rem;color:var(--ink);margin:0;}
+.summary-remaining b{font-weight:700;}
+
 .overlay{
   position:fixed;inset:0;background:rgba(20,22,18,.5);display:flex;align-items:center;justify-content:center;
   padding:20px;z-index:10;
@@ -1299,17 +1307,22 @@ function renderSummary(isFinal){
   var dayClean = dailyCleanInScope();
   var dayPct = dayWords ? Math.round((dayClean/dayWords)*100) : 0;
 
-  // Chip rows instead of prose sentences — easier to scan than a paragraph,
-  // same "chip" style already used for the header stats.
-  var batchChips = batchSeen
-    ? '<div class="chip">'+pct+'% чисто</div><div class="chip">'+batchSeen+' слов</div>'+
-      (batchLearned ? '<div class="chip">выучено новых <b>'+batchLearned+'</b></div>' : '')
+  // Headline result as big numbers (the thing you came here to see), day
+  // totals as a quiet footer line underneath (secondary, same scale as
+  // the headline would read as "which number is which?"), and "осталось"
+  // as a caption tied to the next action rather than another stat chip.
+  var batchStats = batchSeen
+    ? '<div class="summary-stats">'+
+        '<div class="summary-stat"><b>'+pct+'%</b><span>чисто</span></div>'+
+        '<div class="summary-stat"><b>'+batchSeen+'</b><span>слов</span></div>'+
+        (batchLearned ? '<div class="summary-stat"><b>'+batchLearned+'</b><span>выучено</span></div>' : '')+
+      '</div>'
     : '';
-  var remainingChip = (!isFinal && remaining>0)
-    ? '<div class="chip">Осталось <b>'+remaining+'</b> слов ('+miniLeft+' м.т.)</div>'
+  var dayFooter = dayWords
+    ? '<p class="summary-footer">Сегодня: '+dayWords+' слов, '+dayPct+'% чисто</p>'
     : '';
-  var dayChips = dayWords
-    ? '<div class="chip">Сегодня всего <b>'+dayWords+'</b> слов</div><div class="chip">'+dayPct+'% чисто</div>'
+  var remainingLine = (!isFinal && remaining>0)
+    ? '<p class="summary-remaining">Осталось <b>'+remaining+'</b> слов ('+miniLeft+' м.т.)</p>'
     : '';
   var emptyText = !batchSeen ? '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>' : '';
 
@@ -1317,8 +1330,9 @@ function renderSummary(isFinal){
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>'+
     '<h3>'+title+'</h3>'+
     emptyText+
-    (batchChips || remainingChip ? '<div class="stats">'+batchChips+remainingChip+'</div>' : '')+
-    (dayChips ? '<div class="stats">'+dayChips+'</div>' : '')+
+    batchStats+
+    dayFooter+
+    remainingLine+
     (!isFinal && remaining>0
       ? '<button class="btn primary" id="continueBtn">Продолжить</button>'
       : '<button class="btn primary" id="practiceMoreBtn">Тренироваться ещё (вне графика)</button>')+

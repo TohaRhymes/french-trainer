@@ -489,6 +489,17 @@ var addDays = function(dateStr, n){
   return d.toISOString().slice(0,10);
 };
 
+// Russian plural agreement ("1 слово" / "2 слова" / "5 слов"): forms is
+// [one, few, many] — standard ru pluralization rule by last two digits.
+function pluralRu(n, forms){
+  var mod100 = Math.abs(n) % 100;
+  var mod10 = mod100 % 10;
+  if(mod100 > 10 && mod100 < 20) return forms[2];
+  if(mod10 > 1 && mod10 < 5) return forms[1];
+  if(mod10 === 1) return forms[0];
+  return forms[2];
+}
+
 function wordKey(s){ return String(s).trim().toLowerCase(); }
 function deckProgKey(deckId, key){ return deckId+"::"+key; }
 function freshProgressEntry(){ return {box:1, due:todayStr(), learned:false}; }
@@ -1313,16 +1324,17 @@ function renderSummary(isFinal){
   // as a caption tied to the next action rather than another stat chip.
   var batchStats = batchSeen
     ? '<div class="summary-stats">'+
-        '<div class="summary-stat"><b>'+pct+'%</b><span>чисто</span></div>'+
-        '<div class="summary-stat"><b>'+batchSeen+'</b><span>слов</span></div>'+
+        '<div class="summary-stat"><b>'+pct+'%</b><span>правильно</span></div>'+
+        '<div class="summary-stat"><b>'+batchSeen+'</b><span>'+pluralRu(batchSeen,["слово","слова","слов"])+'</span></div>'+
         (batchLearned ? '<div class="summary-stat"><b>'+batchLearned+'</b><span>выучено</span></div>' : '')+
       '</div>'
     : '';
   var dayFooter = dayWords
-    ? '<p class="summary-footer">Сегодня: '+dayWords+' слов, '+dayPct+'% чисто</p>'
+    ? '<p class="summary-footer">Сегодня: '+dayWords+' '+pluralRu(dayWords,["слово","слова","слов"])+', '+dayPct+'% правильно</p>'
     : '';
   var remainingLine = (!isFinal && remaining>0)
-    ? '<p class="summary-remaining">Осталось <b>'+remaining+'</b> слов ('+miniLeft+' м.т.)</p>'
+    ? '<p class="summary-remaining">Осталось <b>'+remaining+'</b> '+pluralRu(remaining,["слово","слова","слов"])+
+      ' ('+miniLeft+' '+pluralRu(miniLeft,["мини-тренировка","мини-тренировки","мини-тренировок"])+')</p>'
     : '';
   var emptyText = !batchSeen ? '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>' : '';
 

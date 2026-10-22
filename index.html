@@ -1367,9 +1367,10 @@ function renderSummary(isFinal){
 function updateFooterNote(){
   var note = document.getElementById("footerNote");
   if(state.activeDeck==="__all__"){
-    note.textContent = "Все наборы вперемешку · мини-тренировка — 10 слов, потом промежуточный итог";
+    note.hidden = true;
     return;
   }
+  note.hidden = false;
   var deck = state.decks[state.activeDeck];
   var count = deck.words.length;
   note.textContent = deck.kind==="verb"

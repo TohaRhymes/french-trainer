@@ -1137,7 +1137,7 @@ function renderCard(){
           b.onclick = function(){
             var start = input.selectionStart||input.value.length, end = input.selectionEnd||input.value.length;
             input.value = input.value.slice(0,start)+ch+input.value.slice(end);
-            input.focus();
+            input.focus({preventScroll:true});
             input.selectionStart = input.selectionEnd = start+ch.length;
           };
           accentRow.appendChild(b);
@@ -1158,7 +1158,7 @@ function renderCard(){
 
   // auto-focus the first empty typing field, if any
   var firstInput = cardArea.querySelector(".type-input");
-  if(firstInput) firstInput.focus();
+  if(firstInput) firstInput.focus({preventScroll:true});
 }
 
 function focusOtherField(field){
@@ -1170,7 +1170,7 @@ function focusOtherField(field){
     var f = fields[(idx+step)%fields.length];
     if(!resolved[f]){
       var inp = document.getElementById("input-"+f);
-      if(inp){ inp.focus(); return; }
+      if(inp){ inp.focus({preventScroll:true}); return; }
     }
   }
 }

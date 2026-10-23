@@ -1263,6 +1263,17 @@ cardArea.addEventListener("click", function(e){
   if(btn) speakFR(btn.dataset.word);
 });
 
+// Enter = "Следующее слово"/"Итог"/"Продолжить" once one of those is on
+// screen. Skipped when defaultPrevented - that means this same Enter
+// keypress was just used by a type-input's own handler to check an
+// answer (see the input's own "keydown" listener below), so it isn't
+// also meant to advance to the next word.
+document.addEventListener("keydown", function(e){
+  if(e.key!=="Enter" || e.defaultPrevented) return;
+  var advanceBtn = document.getElementById("advanceBtn") || document.getElementById("continueBtn");
+  if(advanceBtn){ e.preventDefault(); advanceBtn.click(); }
+});
+
 function finishWordRound(){
   var fields = requiredFields(current);
   var clean = !fields.some(function(f){ return mistaken[f] || hinted[f]; });
@@ -1286,6 +1297,7 @@ function finishWordRound(){
   var cont = document.createElement("button");
   cont.className = "btn primary";
   cont.style.marginTop = "4px";
+  cont.id = "advanceBtn";
   cont.textContent = atBoundary ? "Итог" : "Следующее слово";
   cont.onclick = function(){
     if(atBoundary) renderSummary(queue.length===0);

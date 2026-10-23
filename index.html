@@ -1174,7 +1174,11 @@ function renderCard(){
         if(hinted[field] || resolved[field]) return;
         hinted[field] = true;
         hintBtn.disabled = true;
-        input.placeholder = "начинается на: "+hintSeed(answer)+"…";
+        // Same spot "Ответ: ..." uses (reveal-label below the input), not
+        // the input's own placeholder - so a hint and a reveal never show
+        // up in two different places on the card.
+        var label = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]');
+        if(label){ label.textContent = "Начинается на: "+hintSeed(answer)+"…"; label.hidden = false; }
       };
       var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
       revealBtn.onclick = function(){ revealField(field); };

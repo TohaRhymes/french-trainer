@@ -75,9 +75,26 @@ body{
 h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:16px;}
 
+.toprow{display:flex;flex-direction:column;gap:16px;}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .topbar .title{font-size:1.3rem;font-weight:600;letter-spacing:-0.01em;}
 .topbar .title em{font-style:normal;color:var(--accent);}
+@media (min-width:820px){
+  /* Desktop with a short window (the original reason for this rule): the
+     header, deck picker and stats used to stack as 3 separate full-width
+     rows above the card, pushing it low enough to need scrolling even
+     though there was plenty of spare width. Unwrap .topbar (display:contents
+     - it keeps wrapping title+icon-group for the mobile layout above, but
+     stops being its own flex box here) so title/deck-select/stats/icons
+     become one flex row, reordered with the icons trailing at the end. */
+  .wrap{max-width:760px;}
+  .toprow{flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px 16px;}
+  .toprow .topbar{display:contents;}
+  .toprow .title{order:1;flex:none;}
+  .toprow .deck-select{order:2;width:auto;flex:1 1 180px;min-width:150px;}
+  .toprow .stats{order:3;flex:none;}
+  .toprow .icon-group{order:4;}
+}
 .iconbtn{
   width:38px;height:38px;border-radius:50%;border:1px solid var(--border);
   background:var(--surface);color:var(--ink-muted);display:flex;align-items:center;justify-content:center;
@@ -248,24 +265,26 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 </style>
 
 <div class="wrap">
-  <div class="topbar">
-    <div class="title">Eml<em>ék</em> | запоминание слов</div>
-    <div class="row" style="flex:none;gap:8px;">
-      <button class="iconbtn" id="statsBtn" title="Статистика по словам" aria-label="Статистика по словам">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10"/><path d="M11 19V5"/><path d="M18 19v-7"/></svg>
-      </button>
-      <button class="iconbtn" id="editBtn" title="Наборы слов" aria-label="Наборы слов">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 13.5a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V20a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1H4a2 2 0 110-4h.09a1.7 1.7 0 001.56-1 1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.87.34H10a1.7 1.7 0 001-1.56V4a2 2 0 114 0v.09a1.7 1.7 0 001 1.56 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87V10a1.7 1.7 0 001.56 1H20a2 2 0 110 4h-.09a1.7 1.7 0 00-1.56 1z"/></svg>
-      </button>
-      <button class="iconbtn" id="catalogBtn" title="Доступные наборы" aria-label="Доступные наборы">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
-      </button>
+  <div class="toprow">
+    <div class="topbar">
+      <div class="title">Eml<em>ék</em> | запоминание слов</div>
+      <div class="row icon-group" style="flex:none;gap:8px;">
+        <button class="iconbtn" id="statsBtn" title="Статистика по словам" aria-label="Статистика по словам">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10"/><path d="M11 19V5"/><path d="M18 19v-7"/></svg>
+        </button>
+        <button class="iconbtn" id="editBtn" title="Наборы слов" aria-label="Наборы слов">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 13.5a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V20a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1H4a2 2 0 110-4h.09a1.7 1.7 0 001.56-1 1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.87.34H10a1.7 1.7 0 001-1.56V4a2 2 0 114 0v.09a1.7 1.7 0 001 1.56 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87V10a1.7 1.7 0 001.56 1H20a2 2 0 110 4h-.09a1.7 1.7 0 00-1.56 1z"/></svg>
+        </button>
+        <button class="iconbtn" id="catalogBtn" title="Доступные наборы" aria-label="Доступные наборы">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        </button>
+      </div>
     </div>
+
+    <select id="deckModeSelect" class="deck-select"></select>
+
+    <div class="stats" id="statsRow"></div>
   </div>
-
-  <select id="deckModeSelect" class="deck-select"></select>
-
-  <div class="stats" id="statsRow"></div>
 
   <div class="progressbar"><div id="progressFill" style="width:0%"></div></div>
 

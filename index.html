@@ -539,6 +539,21 @@ function normalizeState(raw){
     Object.keys(DEFAULT_DECKS).forEach(function(deckId){
       if(DEFAULT_DECKS[deckId].autoAdd && !s.decks[deckId]) s.decks[deckId] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
     });
+    // Backfill new words added to an autoAdd deck's catalog entry AFTER this
+    // user already had that deck (e.g. two more Passé Composé verbs added
+    // later) — the block above only handles a deck missing entirely, so a
+    // deck the user already has would otherwise never pick up new words
+    // added to it. Matched by French term so it never touches/duplicates a
+    // word already there, and never touches a deck the user edited/renamed
+    // away from the catalog version.
+    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+      if(!DEFAULT_DECKS[deckId].autoAdd || !s.decks[deckId]) return;
+      var existingKeys = {};
+      s.decks[deckId].words.forEach(function(w){ existingKeys[wordKey(w[0])] = true; });
+      DEFAULT_DECKS[deckId].words.forEach(function(w){
+        if(!existingKeys[wordKey(w[0])]) s.decks[deckId].words.push(w);
+      });
+    });
     Object.keys(s.decks).forEach(function(deckId){
       s.decks[deckId].words.forEach(function(w){
         var key = deckProgKey(deckId, wordKey(w[0]));

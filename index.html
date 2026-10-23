@@ -872,6 +872,7 @@ var current = null;          // one entry, see poolEntries()
 var resolved = {};
 var correctFlags = {};
 var hinted = {};
+var revealed = {};
 var mistaken = {};
 var selectedPronounField = null; // matching-mode (conjug, box<=2): the tapped pronoun awaiting a form
 var batchSeen = 0, batchCorrect = 0, batchLearned = 0, batchTotal = 0;
@@ -983,6 +984,7 @@ function nextWord(){
   resolved = freshFieldFlags(current);
   correctFlags = freshFieldFlags(current);
   hinted = freshFieldFlags(current);
+  revealed = freshFieldFlags(current);
   mistaken = freshFieldFlags(current);
   selectedPronounField = null;
   updateProgressBar();
@@ -1230,7 +1232,11 @@ function attemptField(field, rawValue, clickedBtn){
 function revealField(field){
   // "I have no idea" — show the spelling, but she still has to type it
   // herself to move on. Counts the same as a hint: box doesn't advance.
-  if(hinted[field] || resolved[field]) return;
+  // Guarded on revealed (not hinted) so asking for a hint first doesn't
+  // block a later reveal click - hinted is still set below, since a
+  // reveal should count the same as a hint for the clean-round check.
+  if(revealed[field] || resolved[field]) return;
+  revealed[field] = true;
   hinted[field] = true;
   var answer = fieldAnswer(current, field);
 

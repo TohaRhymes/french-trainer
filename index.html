@@ -232,6 +232,8 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
 .btn.primary:hover{opacity:.92;}
 .btn.ghost{background:transparent;}
+.typo-btn{width:100%;font-size:.82rem;padding:9px 14px;color:var(--ink-muted);}
+.typo-btn:disabled{opacity:.6;}
 .btn:disabled{opacity:.45;cursor:default;}
 
 .progressbar{height:4px;border-radius:999px;background:var(--surface-2);overflow:hidden;}
@@ -943,6 +945,8 @@ var hinted = {};
 var revealed = {};
 var mistaken = {};
 var selectedPronounField = null; // matching-mode (conjug, box<=2): the tapped pronoun awaiting a form
+var roundFinished = false;   // finishWordRound() already scored this entry
+var cleanApplied = false;    // the "it was a typo" button already fixed up the score
 var batchSeen = 0, batchCorrect = 0, batchLearned = 0, batchTotal = 0;
 
 function currentBox(){ return state.progress[entryProgKey(current)].box; }
@@ -1055,6 +1059,8 @@ function nextWord(){
   revealed = freshFieldFlags(current);
   mistaken = freshFieldFlags(current);
   selectedPronounField = null;
+  roundFinished = false;
+  cleanApplied = false;
   updateProgressBar();
   renderCard();
 }
@@ -1136,6 +1142,7 @@ function bindMatchHandlers(entry){
         if(requiredFields(entry).every(function(f){ return resolved[f]; })) finishWordRound();
       } else {
         mistaken[field] = true;
+        document.getElementById("typoBtn").hidden = false;
         btn.classList.add("wrong");
         setTimeout(function(){ btn.classList.remove("wrong"); }, 500);
       }
@@ -1175,8 +1182,29 @@ function renderCard(){
     '<div class="ruword">'+promptText(current)+'</div>'+
     (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
     '<div class="'+(isMatching?'match-wrap':'fields-row')+'">'+fieldsHtml+'</div>'+
+    '<button type="button" class="btn ghost typo-btn" id="typoBtn" hidden>Это была опечатка — я знала правильный ответ</button>'+
     (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deckName+'</div>' : '');
   cardArea.innerHTML = html;
+
+  var typoBtn = document.getElementById("typoBtn");
+  typoBtn.onclick = function(){
+    requiredFields(current).forEach(function(f){ mistaken[f] = false; });
+    typoBtn.disabled = true;
+    typoBtn.textContent = "Учтено — опечатка не считается ошибкой";
+    if(roundFinished && !cleanApplied){
+      cleanApplied = true;
+      applyProgress(true);
+      batchCorrect++;
+      if(!freePractice){
+        var key = entryProgKey(current);
+        state.daily.cleanWords[key] = true;
+        var patch = {daily:{date: state.daily.date, cleanWords:{}}};
+        patch.daily.cleanWords[key] = true;
+        patchState(patch);
+      }
+      renderStats();
+    }
+  };
 
   if(isMatching){
     bindMatchHandlers(current);
@@ -1274,6 +1302,7 @@ function attemptField(field, rawValue, clickedBtn){
     // wrong attempt: mark it, give feedback, but let her try again —
     // audio only ever plays for the correct word, whenever it's finally picked.
     mistaken[field] = true;
+    document.getElementById("typoBtn").hidden = false;
     if(mode==="choice" && clickedBtn){
       clickedBtn.classList.add("wrong");
       clickedBtn.disabled = true;
@@ -1357,6 +1386,7 @@ function finishWordRound(){
   var fields = requiredFields(current);
   var clean = !fields.some(function(f){ return mistaken[f] || hinted[f]; });
   applyProgress(clean);
+  roundFinished = true;
 
   batchSeen++;
   if(clean) batchCorrect++;

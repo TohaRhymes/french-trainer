@@ -11,21 +11,21 @@
    (infinitif + participe passé, prompt = ru translation) or "word" (single
    field, direction randomized each round). */
 :root{
-  --bg:#eef0ea;
+  --bg:#faf8f3;
   --surface:#ffffff;
-  --surface-2:#e4e6de;
-  --ink:#1c2420;
-  --ink-muted:#5b6459;
-  --border:#cdd1c4;
-  --accent:#7a2331;
+  --surface-2:#efe8da;
+  --ink:#201d1a;
+  --ink-muted:#6b6459;
+  --border:#ddd3bf;
+  --accent:#8e1636;
   --accent-ink:#ffffff;
-  --accent-2:#9a6a2a;
+  --accent-2:#b2792a;
   --success:#2f6b4f;
   --success-bg:#e3efe8;
   --danger:#a8342a;
   --danger-bg:#f7e6e3;
   --radius:14px;
-  --select-arrow:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%235b6459" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
+  --select-arrow:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%236b6459" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark){
@@ -91,13 +91,19 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .filterbar{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;}
 @media (max-width:480px){ .filterbar{flex-direction:column;align-items:stretch;} }
 @media (min-width:820px){ .wrap{max-width:680px;} }
+/* One pill-shaped toolbar instead of 3 separate floating circles with gaps
+   between them — same 3 actions, but reads as one grouped control. */
+.icon-group{
+  display:flex;gap:2px;flex:none;
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;
+}
 .iconbtn{
-  width:38px;height:38px;border-radius:50%;border:1px solid var(--border);
-  background:var(--surface);color:var(--ink-muted);display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:50%;border:none;
+  background:transparent;color:var(--ink-muted);display:flex;align-items:center;justify-content:center;
   cursor:pointer;flex:none;
 }
-.iconbtn:hover{color:var(--ink);border-color:var(--ink-muted);}
-.iconbtn svg{width:18px;height:18px;}
+.iconbtn:hover{color:var(--ink);background:var(--surface-2);}
+.iconbtn svg{width:17px;height:17px;}
 
 .deck-select{
   font:inherit;font-size:.85rem;padding:8px 30px 8px 12px;border-radius:999px;border:1px solid var(--border);
@@ -118,7 +124,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 
 .card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:28px 26px;display:flex;flex-direction:column;gap:18px;
+  padding:24px;display:flex;flex-direction:column;gap:16px;
 }
 .eyebrow{
   font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-muted);
@@ -126,15 +132,15 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 }
 .box-dots{display:flex;gap:4px;}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--border);}
-.dot.on{background:var(--accent-2);}
+.dot.on{background:var(--accent);}
 
-.ruword{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:2.1rem;text-align:center;padding-block:6px;letter-spacing:-0.01em;}
+.ruword{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:2.35rem;text-align:center;padding-block:6px;letter-spacing:-0.015em;}
 .deck-tag{font-size:.7rem;color:var(--ink-muted);text-align:right;}
 
 .fields-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
 .field{
-  flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:10px;
-  background:var(--surface-2);border-radius:12px;padding:14px;
+  flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:8px;
+  background:var(--surface-2);border-radius:12px;padding:16px;
 }
 @media (max-width: 480px){
   /* below this, 220px-wide columns would squeeze instead of wrap, and
@@ -146,11 +152,12 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 
 .choices{display:flex;flex-direction:column;gap:7px;}
 .choice-btn{
-  text-align:left;padding:10px 13px;border-radius:9px;border:1px solid var(--border);
+  text-align:left;padding:10px 16px;border-radius:9px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+  box-shadow:0 1px 2px rgba(32,29,26,.06);transition:box-shadow .15s ease,border-color .15s ease,transform .1s ease;
 }
-.choice-btn:hover{border-color:var(--accent-2);}
+.choice-btn:hover{border-color:var(--accent-2);box-shadow:0 2px 6px rgba(32,29,26,.1);transform:translateY(-1px);}
 .choice-btn.correct{background:var(--success-bg);border-color:var(--success);color:var(--success);font-weight:600;}
 .choice-btn.wrong{background:var(--danger-bg);border-color:var(--danger);color:var(--danger);}
 .choice-btn.removed{opacity:.35;text-decoration:line-through;}
@@ -214,7 +221,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .row{display:flex;gap:10px;}
 .btn{
   font:inherit;font-weight:600;font-size:.92rem;border-radius:10px;border:1px solid var(--border);
-  padding:11px 16px;cursor:pointer;background:var(--surface-2);color:var(--ink);flex:1;
+  padding:12px 16px;cursor:pointer;background:var(--surface-2);color:var(--ink);flex:1;
 }
 .btn:hover{border-color:var(--ink-muted);}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
@@ -223,10 +230,10 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .btn:disabled{opacity:.45;cursor:default;}
 
 .progressbar{height:4px;border-radius:999px;background:var(--surface-2);overflow:hidden;}
-.progressbar > div{height:100%;background:var(--accent-2);transition:width .25s ease;}
+.progressbar > div{height:100%;background:var(--accent);transition:width .25s ease;}
 
 .empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding-block:28px;}
-.empty svg{width:46px;height:46px;color:var(--accent-2);}
+.empty svg{width:46px;height:46px;color:var(--accent);}
 .empty p{color:var(--ink-muted);font-size:.92rem;max-width:34ch;}
 
 .summary-stats{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;}
@@ -244,7 +251,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .modal{
   position:relative;
   background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);
-  width:100%;max-width:440px;max-height:85vh;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:12px;
+  width:100%;max-width:440px;max-height:85vh;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:16px;
 }
 .modal h2{font-size:1.1rem;padding-right:28px;}
 .modal-close{
@@ -277,7 +284,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .stat-row.is-learned .words .inf{color:var(--success);}
 .stat-row .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.78rem;color:var(--ink-muted);}
 .stat-row .deck-chip{background:var(--surface-2);border-radius:999px;padding:2px 9px;}
-.stat-row .due-today{color:var(--accent-2);font-weight:600;}
+.stat-row .due-today{color:var(--accent);font-weight:600;}
 footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-top:4px;}
 
 [hidden]{display:none!important;}
@@ -287,7 +294,7 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
   <div class="toprow">
     <div class="topbar">
       <div class="title">Eml<em>ék</em> | запоминание слов</div>
-      <div class="row icon-group" style="flex:none;gap:8px;">
+      <div class="icon-group">
         <button class="iconbtn" id="statsBtn" title="Статистика по словам" aria-label="Статистика по словам">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10"/><path d="M11 19V5"/><path d="M18 19v-7"/></svg>
         </button>

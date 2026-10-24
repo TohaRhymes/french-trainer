@@ -689,6 +689,7 @@ function normalizeState(raw){
 // existing local progress into the shared store the first time it runs.
 var dbNS = null;
 var useDb = false;
+var dbDiag = "";
 
 function saveState(){
   if(useDb && dbNS){
@@ -715,24 +716,42 @@ function patchState(patch){
 }
 
 async function loadStateAsync(){
-  try{
-    dbNS = (typeof claude !== "undefined" && claude.use) ? await claude.use("db") : null;
-  }catch(e){ dbNS = null; }
+  // Visible diagnostic (see footerNote) for why progress may not be syncing
+  // across browsers/devices — db connection failures are otherwise silent
+  // (caught and swallowed), so there was no way to tell "not connected"
+  // apart from "connected but genuinely offline" without devtools.
+  if(typeof claude === "undefined" || !claude.use){
+    dbDiag = "claude.use недоступен на этой странице";
+  } else {
+    try{
+      dbNS = await claude.use("db");
+      dbDiag = dbNS ? "" : "claude.use('db') вернул null";
+    }catch(e){
+      dbNS = null;
+      dbDiag = "ошибка подключения: "+(e && e.message ? e.message : String(e));
+    }
+  }
   useDb = !!dbNS;
+
+  var uid = "";
+  try{
+    var userNS = (typeof claude !== "undefined" && claude.use) ? await claude.use("user") : null;
+    if(userNS && userNS.id) uid = await userNS.id();
+  }catch(e){}
+  if(uid) dbDiag += (dbDiag ? ", " : "") + "id "+uid.slice(0,10);
 
   if(useDb){
     try{
       var snap = await dbNS.doc("data/users/me/state").get();
-      if(snap.exists){
-        // snap.data() comes back frozen (platform-owned) — applyProgress
-        // mutates box/due/learned in place, so work on a plain deep copy.
-        return normalizeState(JSON.parse(JSON.stringify(snap.data())));
-      }
+      // snap.data() comes back frozen (platform-owned) — applyProgress
+      // mutates box/due/learned in place, so work on a plain deep copy.
+      if(snap.exists) return normalizeState(JSON.parse(JSON.stringify(snap.data())));
       var migrated = normalizeState(loadLocalStateIfAny() || {});
       await dbNS.doc("data/users/me/state").set(migrated);
       return migrated;
     }catch(e){
       useDb = false;
+      dbDiag = "ошибка чтения облака: "+(e && e.message ? e.message : String(e))+(uid ? ", id "+uid.slice(0,10) : "");
     }
   }
   return normalizeState(loadLocalStateIfAny() || {});
@@ -1516,7 +1535,9 @@ function renderSummary(isFinal){
 }
 
 function updateFooterNote(){
-  document.getElementById("footerNote").hidden = true;
+  var el = document.getElementById("footerNote");
+  el.hidden = false;
+  el.textContent = (useDb ? "Прогресс: общее облако" : "Прогресс: только в этом браузере")+(dbDiag ? " ("+dbDiag+")" : "");
 }
 
 function startSession(){

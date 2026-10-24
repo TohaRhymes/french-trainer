@@ -690,10 +690,18 @@ function normalizeState(raw){
 var dbNS = null;
 var useDb = false;
 var dbDiag = "";
+var myUserId = null;
+
+// The "me" alias in "data/users/me/..." is a convenience only the ArtifactData
+// admin tool understands (for inspecting a user's own sandbox); the page's
+// own db capability has no such alias and rejects a literal "me" path segment
+// as malformed — it needs the real id from the user capability substituted
+// in, hence this helper instead of a hardcoded path string.
+function myStateDocPath(){ return "data/users/"+myUserId+"/state"; }
 
 function saveState(){
-  if(useDb && dbNS){
-    dbNS.doc("data/users/me/state").set(state).catch(function(){});
+  if(useDb && dbNS && myUserId){
+    dbNS.doc(myStateDocPath()).set(state).catch(function(){});
   } else {
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
   }
@@ -708,8 +716,8 @@ function saveState(){
 // leaving anything touched elsewhere untouched, so use it for the frequent,
 // narrow writes (one word's progress, one day's bookkeeping).
 function patchState(patch){
-  if(useDb && dbNS){
-    dbNS.doc("data/users/me/state").update(patch).catch(function(){});
+  if(useDb && dbNS && myUserId){
+    dbNS.doc(myStateDocPath()).update(patch).catch(function(){});
   } else {
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
   }
@@ -731,23 +739,28 @@ async function loadStateAsync(){
       dbDiag = "ошибка подключения: "+(e && e.message ? e.message : String(e));
     }
   }
-  useDb = !!dbNS;
-
   var uid = "";
   try{
     var userNS = (typeof claude !== "undefined" && claude.use) ? await claude.use("user") : null;
     if(userNS && userNS.id) uid = await userNS.id();
   }catch(e){}
+  myUserId = uid || null;
   if(uid) dbDiag += (dbDiag ? ", " : "") + "id "+uid.slice(0,10);
+
+  // db needs the real id to address this user's own doc (see myStateDocPath) —
+  // without one there's nowhere valid to read/write, so treat it like db
+  // itself being unavailable rather than trying a doomed request.
+  useDb = !!(dbNS && myUserId);
+  if(dbNS && !myUserId) dbDiag += (dbDiag ? ", " : "") + "не удалось получить id пользователя";
 
   if(useDb){
     try{
-      var snap = await dbNS.doc("data/users/me/state").get();
+      var snap = await dbNS.doc(myStateDocPath()).get();
       // snap.data() comes back frozen (platform-owned) — applyProgress
       // mutates box/due/learned in place, so work on a plain deep copy.
       if(snap.exists) return normalizeState(JSON.parse(JSON.stringify(snap.data())));
       var migrated = normalizeState(loadLocalStateIfAny() || {});
-      await dbNS.doc("data/users/me/state").set(migrated);
+      await dbNS.doc(myStateDocPath()).set(migrated);
       return migrated;
     }catch(e){
       useDb = false;

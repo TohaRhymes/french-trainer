@@ -25,6 +25,7 @@
   --danger:#a8342a;
   --danger-bg:#f7e6e3;
   --radius:14px;
+  --select-arrow:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%235b6459" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark){
@@ -42,6 +43,7 @@
     --success-bg:#1c2f24;
     --danger:#e2857c;
     --danger-bg:#331f1c;
+    --select-arrow:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23a7ae9f" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
     color-scheme: dark;
   }
 }
@@ -59,6 +61,7 @@
   --success-bg:#1c2f24;
   --danger:#e2857c;
   --danger-bg:#331f1c;
+  --select-arrow:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23a7ae9f" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
   color-scheme: dark;
 }
 *{box-sizing:border-box;}
@@ -75,26 +78,19 @@ body{
 h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .wrap{max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:16px;}
 
-.toprow{display:flex;flex-direction:column;gap:16px;}
+/* Two deterministic rows, always: identity+actions on top, filter+progress
+   stats below. Earlier this tried to merge all four groups (title,
+   deck-select, stats, icons) into one row past 820px via display:contents -
+   but their combined minimum widths exceed even a wide .wrap, so the icon
+   row silently wrapped onto its own orphaned line anyway. Two fixed rows
+   never wrap unpredictably, so the header reads the same at every width. */
+.toprow{display:flex;flex-direction:column;gap:12px;}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .topbar .title{font-size:1.3rem;font-weight:600;letter-spacing:-0.01em;}
 .topbar .title em{font-style:normal;color:var(--accent);}
-@media (min-width:820px){
-  /* Desktop with a short window (the original reason for this rule): the
-     header, deck picker and stats used to stack as 3 separate full-width
-     rows above the card, pushing it low enough to need scrolling even
-     though there was plenty of spare width. Unwrap .topbar (display:contents
-     - it keeps wrapping title+icon-group for the mobile layout above, but
-     stops being its own flex box here) so title/deck-select/stats/icons
-     become one flex row, reordered with the icons trailing at the end. */
-  .wrap{max-width:760px;}
-  .toprow{flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px 16px;}
-  .toprow .topbar{display:contents;}
-  .toprow .title{order:1;flex:none;}
-  .toprow .deck-select{order:2;width:auto;flex:1 1 180px;min-width:150px;}
-  .toprow .stats{order:3;flex:none;}
-  .toprow .icon-group{order:4;}
-}
+.filterbar{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;}
+@media (max-width:480px){ .filterbar{flex-direction:column;align-items:stretch;} }
+@media (min-width:820px){ .wrap{max-width:680px;} }
 .iconbtn{
   width:38px;height:38px;border-radius:50%;border:1px solid var(--border);
   background:var(--surface);color:var(--ink-muted);display:flex;align-items:center;justify-content:center;
@@ -104,11 +100,15 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .iconbtn svg{width:18px;height:18px;}
 
 .deck-select{
-  font:inherit;font-size:.85rem;padding:8px 10px;border-radius:9px;border:1px solid var(--border);
-  background:var(--surface);color:var(--ink);width:100%;
+  font:inherit;font-size:.85rem;padding:8px 30px 8px 12px;border-radius:999px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink);width:auto;max-width:100%;flex:0 1 auto;
+  -webkit-appearance:none;appearance:none;
+  background-image:var(--select-arrow);
+  background-repeat:no-repeat;background-position:right 10px center;background-size:14px;
 }
+@media (max-width:480px){ .deck-select{width:100%;} }
 
-.stats{display:flex;gap:8px;flex-wrap:wrap;}
+.stats{display:flex;gap:8px;flex-wrap:wrap;flex:none;}
 .chip{
   background:var(--surface);border:1px solid var(--border);border-radius:999px;
   padding:6px 12px;font-size:.78rem;color:var(--ink-muted);display:flex;gap:6px;align-items:baseline;
@@ -157,11 +157,30 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .choice-btn:disabled{cursor:default;}
 .choice-btn.selected{border-color:var(--accent-2);box-shadow:0 0 0 2px var(--accent-2) inset;}
 
-.match-wrap{display:flex;gap:14px;align-items:flex-start;}
-.match-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:7px;}
-.match-row{display:flex;align-items:center;gap:6px;}
-.match-row .choice-btn{flex:1;}
-@media (max-width: 480px){ .match-wrap{flex-direction:column;} }
+/* Matching game: pronouns are a fixed reference you tap to "arm", forms are
+   the real choices you're hunting for — so they get unequal column widths
+   and distinct visual weight instead of two identical button grids. */
+.match-wrap{display:flex;gap:12px;align-items:stretch;}
+.match-col{min-width:0;display:flex;flex-direction:column;gap:8px;}
+.match-col.pronouns{flex:0 0 clamp(96px, 30vw, 124px);}
+.match-col.forms{flex:1 1 0;}
+.match-row{display:flex;align-items:center;gap:5px;}
+/* single-class selectors on purpose: keeps specificity equal to .choice-btn's
+   own base rule, so this only overrides the shared resting look (which it
+   declares later in the sheet) while leaving .correct/.wrong/.removed free
+   to still win on their own higher specificity. */
+.match-pronoun{
+  flex:1;min-width:0;text-align:center;padding-inline:6px;
+  font-family:"Fraunces",Georgia,serif;font-weight:600;
+  background:var(--surface-2);border-color:transparent;
+}
+.match-pronoun:hover{border-color:var(--accent-2);}
+.match-pronoun.selected{
+  background:var(--accent);color:var(--accent-ink);border-color:var(--accent);box-shadow:none;
+}
+.match-row .hintbtn{width:22px;height:22px;flex:none;opacity:.55;}
+.match-row .hintbtn:hover{opacity:1;}
+.match-form{font-weight:500;}
 
 .type-row{display:flex;gap:6px;align-items:center;}
 .type-input{
@@ -281,9 +300,10 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
       </div>
     </div>
 
-    <select id="deckModeSelect" class="deck-select"></select>
-
-    <div class="stats" id="statsRow"></div>
+    <div class="filterbar">
+      <select id="deckModeSelect" class="deck-select"></select>
+      <div class="stats" id="statsRow"></div>
+    </div>
   </div>
 
   <div class="progressbar"><div id="progressFill" style="width:0%"></div></div>
@@ -1069,7 +1089,7 @@ function renderMatchHtml(entry){
   var formsHtml = forms.map(function(form){
     return '<button type="button" class="choice-btn match-form">'+form+'</button>';
   }).join("");
-  return '<div class="match-col">'+pronounsHtml+'</div><div class="match-col">'+formsHtml+'</div>';
+  return '<div class="match-col pronouns">'+pronounsHtml+'</div><div class="match-col forms">'+formsHtml+'</div>';
 }
 
 function bindMatchHandlers(entry){

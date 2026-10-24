@@ -206,11 +206,16 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .accent-key:hover{color:var(--ink);}
 
 .field-actions{display:flex;gap:6px;flex:none;}
-.hintbtn, .revealbtn{
+.hintbtn, .revealbtn, .accentbtn{
   flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--surface);
   color:var(--accent-2);cursor:pointer;font-size:.78rem;font-weight:700;line-height:1;
 }
 .hintbtn:disabled, .revealbtn:disabled{opacity:.35;cursor:default;}
+/* accented-letters helper is opt-in per field: collapsed by default so it
+   never eats space for words that don't need it, this button is the only
+   way to open it, and it marks itself "active" (filled) while open. */
+.accentbtn{font-style:italic;font-family:"Fraunces",Georgia,serif;}
+.accentbtn.active{background:var(--accent-2);border-color:var(--accent-2);color:var(--accent-ink);}
 
 .speakmini{
   width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--surface);
@@ -1059,10 +1064,12 @@ function fieldBlock(entry, field){
   var mode = box<=2 ? "choice" : "type";
   var answer = fieldAnswer(entry, field);
   var label = fieldLabel(entry, field);
+  var needsAccent = mode==="type" && answerIsFrench(entry, field);
   var html = '<div class="field" data-field="'+field+'">'+
     '<div class="field-label"><span>'+label+'</span><span class="field-actions">'+
       '<button type="button" class="hintbtn" data-field="'+field+'" title="Подсказка (без балла)">?</button>'+
       (mode==="type" ? '<button type="button" class="revealbtn" data-field="'+field+'" title="Показать ответ (без балла)">👁</button>' : '')+
+      (needsAccent ? '<button type="button" class="accentbtn" data-field="'+field+'" title="Показать спецсимволы">é</button>' : '')+
     '</span></div>';
   if(mode==="choice"){
     var options = shuffle(distractorsFor(entry, field, answer).concat([answer]));
@@ -1076,7 +1083,7 @@ function fieldBlock(entry, field){
         '<input class="type-input" id="input-'+field+'" data-field="'+field+'" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Введи и нажми Enter">'+
       '</div>'+
       '<span class="reveal-label" data-reveal="'+field+'" hidden></span>'+
-      (answerIsFrench(entry, field) ? '<div class="accent-row" data-accent="'+field+'"></div>' : '');
+      (needsAccent ? '<div class="accent-row" data-accent="'+field+'" hidden></div>' : '');
   }
   html += '</div>';
   return html;
@@ -1215,6 +1222,11 @@ function renderCard(){
           };
           accentRow.appendChild(b);
         });
+        var accentBtn = cardArea.querySelector('.accentbtn[data-field="'+field+'"]');
+        accentBtn.onclick = function(){
+          accentRow.hidden = !accentRow.hidden;
+          accentBtn.classList.toggle("active", !accentRow.hidden);
+        };
       }
       input.addEventListener("input", function(){ input.classList.remove("wrong"); });
       input.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); attemptField(field, input.value, null); } });

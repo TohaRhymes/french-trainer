@@ -609,6 +609,23 @@ function normalizeState(raw){
         if(!existingKeys[wordKey(w[0])]) s.decks[deckId].words.push(w);
       });
     });
+    // Keep an existing word's own fields (translation, distractors, answer)
+    // in sync with the catalog, matched by French term — a catalog content
+    // fix (typo, spoiler in the translation hint, wrong distractor) would
+    // otherwise never reach a deck the user already adopted, since the
+    // backfill above only ever adds words, never updates ones already
+    // present. This runs on every load regardless of where the saved state
+    // came from (shared db or the localStorage fallback), so it self-heals
+    // either way.
+    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+      if(!DEFAULT_DECKS[deckId].autoAdd || !s.decks[deckId]) return;
+      var catalogByKey = {};
+      DEFAULT_DECKS[deckId].words.forEach(function(w){ catalogByKey[wordKey(w[0])] = w; });
+      s.decks[deckId].words.forEach(function(w, i){
+        var catalogWord = catalogByKey[wordKey(w[0])];
+        if(catalogWord) s.decks[deckId].words[i] = JSON.parse(JSON.stringify(catalogWord));
+      });
+    });
     Object.keys(s.decks).forEach(function(deckId){
       s.decks[deckId].words.forEach(function(w){
         var key = deckProgKey(deckId, wordKey(w[0]));

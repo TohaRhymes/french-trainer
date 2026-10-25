@@ -562,9 +562,17 @@ var todayStr = function(){
   return d.getFullYear()+"-"+mm+"-"+dd;
 };
 var addDays = function(dateStr, n){
+  // Same local-date-parts approach as todayStr() above, and for the same
+  // reason: toISOString() is always UTC, so for any timezone ahead of UTC
+  // (e.g. Switzerland) it rolled the result back a calendar day versus the
+  // local-midnight input this parses — addDays(today, 1) was silently
+  // returning today's own date instead of tomorrow's, so a word answered
+  // with a mistake stayed stamped "due today" and never advanced.
   var d = new Date(dateStr+"T00:00:00");
   d.setDate(d.getDate()+n);
-  return d.toISOString().slice(0,10);
+  var mm = String(d.getMonth()+1).padStart(2,"0");
+  var dd = String(d.getDate()).padStart(2,"0");
+  return d.getFullYear()+"-"+mm+"-"+dd;
 };
 
 // Russian plural agreement ("1 слово" / "2 слова" / "5 слов"): forms is

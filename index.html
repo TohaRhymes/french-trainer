@@ -166,6 +166,17 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   .conjug-grid .hintbtn, .conjug-grid .revealbtn, .conjug-grid .accentbtn, .conjug-grid .speakmini{width:22px;height:22px;font-size:.7rem;}
   .conjug-grid .speakmini svg{width:11px;height:11px;}
 }
+@media (min-width:900px){
+  /* Wide desktop: the .wrap's 680px cap leaves most of the window empty on
+     either side while 6 fields still only fit 2-per-row within it, pushing
+     the typo/next buttons below the fold. A conjugation card is the one
+     place that actually has 6 same-shaped fields to lay out, so widen the
+     page only while one is showing (toggled via body.conjug-card in JS,
+     not CSS alone) and switch to a fixed 3-column grid — 2 rows instead of
+     3 — rather than hoping flex-wrap happens to land on 3 at this width. */
+  body.conjug-card .wrap{max-width:960px;}
+  .conjug-grid{display:grid;grid-template-columns:repeat(3,1fr);}
+}
 .field-label{font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted);display:flex;justify-content:space-between;align-items:center;}
 
 .choices{display:flex;flex-direction:column;gap:7px;}
@@ -1241,6 +1252,7 @@ function renderCard(){
   var fields = requiredFields(current);
   var isMatching = current.kind==="conjug" && box<=2;
   var isConjugType = current.kind==="conjug" && !isMatching;
+  document.body.classList.toggle("conjug-card", isConjugType);
   var fieldsHtml = isMatching ? renderMatchHtml(current) : fields.map(function(f){ return fieldBlock(current, f); }).join("");
   var deckName = state.decks[current.deckId].name;
   var translationLine = current.kind==="cloze" ? current.word[3] : (current.kind==="conjug" ? current.word[2] : null);

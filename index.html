@@ -148,6 +148,24 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   .fields-row{flex-direction:column;}
   .field{flex-basis:auto;}
 }
+@media (min-width:481px){
+  /* A conjugation card always has exactly 6 fields, which already wrap
+     into 2 columns here (same flex-wrap as any other card) — but each
+     field has more padding than 6-at-once needs, pushing the typo button
+     and the next-word button below the fold. Tighten spacing only, same
+     column count, same mechanism — and leave phone widths (<=480px)
+     untouched entirely, on request.
+     Also covers .speakmini: a field's "?" hint button turns into a
+     .speakmini replay button once answered correctly, and it must match
+     size or that one button jumping from 26px back to default size shifts
+     the whole label row by a few px right as the field turns green. */
+  .conjug-grid{gap:8px 10px;}
+  .conjug-grid .field{padding:10px 12px;gap:6px;}
+  .conjug-grid .field-label{font-size:.68rem;}
+  .conjug-grid .type-input{padding:8px 10px;font-size:.92rem;}
+  .conjug-grid .hintbtn, .conjug-grid .revealbtn, .conjug-grid .accentbtn, .conjug-grid .speakmini{width:22px;height:22px;font-size:.7rem;}
+  .conjug-grid .speakmini svg{width:11px;height:11px;}
+}
 .field-label{font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted);display:flex;justify-content:space-between;align-items:center;}
 
 .choices{display:flex;flex-direction:column;gap:7px;}
@@ -1222,6 +1240,7 @@ function renderCard(){
   for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
   var fields = requiredFields(current);
   var isMatching = current.kind==="conjug" && box<=2;
+  var isConjugType = current.kind==="conjug" && !isMatching;
   var fieldsHtml = isMatching ? renderMatchHtml(current) : fields.map(function(f){ return fieldBlock(current, f); }).join("");
   var deckName = state.decks[current.deckId].name;
   var translationLine = current.kind==="cloze" ? current.word[3] : (current.kind==="conjug" ? current.word[2] : null);
@@ -1230,7 +1249,7 @@ function renderCard(){
     '<div class="eyebrow"><span>'+promptEyebrow(current)+(freePractice?' · свободно':'')+'</span><span class="box-dots">'+dots+'</span></div>'+
     '<div class="ruword">'+promptText(current)+'</div>'+
     (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
-    '<div class="'+(isMatching?'match-wrap':'fields-row')+'">'+fieldsHtml+'</div>'+
+    '<div class="'+(isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
     '<button type="button" class="btn ghost typo-btn" id="typoBtn" hidden>Это опечатка</button>'+
     (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deckName+'</div>' : '');
   cardArea.innerHTML = html;

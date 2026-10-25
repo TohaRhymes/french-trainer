@@ -303,6 +303,11 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .stats-section-head{
   font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-muted);
   font-weight:700;padding:14px 4px 6px;border-bottom:1px solid var(--border);
+  /* .stats-list (its parent) is the scrolling element here, not .modal, so
+     sticky pins each header to the top of that scroll box as you pass
+     through its section — background matches .modal's so rows scrolling
+     underneath don't show through. */
+  position:sticky;top:0;z-index:1;background:var(--surface);
 }
 .stats-section-head:first-child{padding-top:2px;}
 .stat-row{padding:9px 4px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px;}

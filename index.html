@@ -121,6 +121,8 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   font-variant-numeric:tabular-nums;
 }
 .chip b{color:var(--ink);font-size:.86rem;font-weight:700;}
+.chip-click{cursor:pointer;}
+.chip-click:hover{border-color:var(--accent-2);}
 
 .card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
@@ -349,7 +351,7 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 <div class="overlay" id="statsOverlay" hidden>
   <div class="modal" style="max-width:560px;">
     <button type="button" class="modal-close" id="closeStatsBtn" title="Закрыть">✕</button>
-    <h2>Статистика по словам</h2>
+    <h2 id="statsTitle">Статистика по словам</h2>
     <div class="stats" id="statsSummary"></div>
     <div class="stats-list" id="statsTable"></div>
   </div>
@@ -1109,9 +1111,20 @@ function renderStats(){
   var frozenTotal = dailyTarget[state.activeDeck];
   var dueToday = frozenTotal!==undefined ? frozenTotal : (doneToday + queue.length);
   statsRow.innerHTML =
-    '<div class="chip">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
-    '<div class="chip">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>';
+    '<div class="chip chip-click" id="chipLearned">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
+    '<div class="chip chip-click" id="chipToday">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>';
 }
+
+// Delegated (not rebound on every renderStats() call, which replaces these
+// chips' innerHTML constantly during a session): tapping "Выучено" opens the
+// existing box-grouped breakdown (it already separates learned from
+// not-yet-learned by section), tapping "Сегодня" opens the schedule view
+// grouped by actual due date instead.
+statsRow.addEventListener("click", function(e){
+  if(!state) return;
+  if(e.target.closest("#chipLearned")) openStatsOverlay("boxes");
+  else if(e.target.closest("#chipToday")) openStatsOverlay("schedule");
+});
 
 function updateProgressBar(){
   var pct = batchTotal ? Math.round((batchSeen/batchTotal)*100) : 0;
@@ -1649,6 +1662,29 @@ function daysBetween(fromStr, toStr){
   return Math.round((b-a)/86400000);
 }
 
+// Shared by both overlay views below (box-grouped and date-grouped) — same
+// word row, just grouped and labeled differently.
+function wordRowHtml(e, p, trailingLabel){
+  var wordsLine = e.kind==="verb"
+    ? '<span class="inf">'+e.word[0]+'</span><span class="sep">→</span>'+e.word[1]+'<span class="sep">—</span>'+e.word[2]
+    : e.kind==="conjug"
+    ? '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[2]
+    : '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[1];
+  var deckTag = state.activeDeck==="__all__" ? '<span class="deck-chip">'+state.decks[e.deckId].name+'</span>' : '<span></span>';
+  var dots = "";
+  for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=p.box?' on':'')+'"></span>'; }
+  return '<div class="stat-row'+(p.learned?' is-learned':'')+'">'+
+    '<div class="words">'+wordsLine+'</div>'+
+    '<div class="meta"><span class="box-dots">'+dots+'</span>'+deckTag+(trailingLabel!==null?'<span style="margin-left:auto">'+trailingLabel+'</span>':'')+'</div>'+
+  '</div>';
+}
+
+function dueLabelHtml(today, due){
+  if(due <= today) return '<span class="due-today">сегодня</span>';
+  var d = daysBetween(today, due);
+  return 'через '+d+' '+(d===1?'день':(d<5?'дня':'дней'));
+}
+
 function renderStatsTable(){
   var today = todayStr();
   var entries = poolEntries();
@@ -1691,33 +1727,66 @@ function renderStatsTable(){
       html += '<div class="stats-section-head">'+BOX_LABELS[box]+' ('+(counts[box]||0)+')</div>';
       lastBox = box;
     }
-    var dueLabel;
-    if(r.p.due <= today) dueLabel = '<span class="due-today">сегодня</span>';
-    else {
-      var d = daysBetween(today, r.p.due);
-      dueLabel = 'через '+d+' '+(d===1?'день':(d<5?'дня':'дней'));
-    }
-    var wordsLine = r.e.kind==="verb"
-      ? '<span class="inf">'+r.e.word[0]+'</span><span class="sep">→</span>'+r.e.word[1]+'<span class="sep">—</span>'+r.e.word[2]
-      : r.e.kind==="conjug"
-      ? '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[2]
-      : '<span class="inf">'+r.e.word[0]+'</span><span class="sep">—</span>'+r.e.word[1];
-    var deckTag = state.activeDeck==="__all__" ? '<span class="deck-chip">'+state.decks[r.e.deckId].name+'</span>' : '<span></span>';
-    var dots = "";
-    for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
-    html += '<div class="stat-row'+(r.p.learned?' is-learned':'')+'">'+
-      '<div class="words">'+wordsLine+'</div>'+
-      '<div class="meta"><span class="box-dots">'+dots+'</span>'+deckTag+'<span style="margin-left:auto">'+dueLabel+'</span></div>'+
-    '</div>';
+    html += wordRowHtml(r.e, r.p, dueLabelHtml(today, r.p.due));
   });
   document.getElementById("statsTable").innerHTML = html;
+}
+
+var RU_MONTHS = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+
+// Same word list as renderStatsTable, but grouped by calendar due-date
+// instead of by box — "when will I actually see this word again", read
+// top to bottom chronologically. Every overdue/due-now word (due<=today)
+// folds into one "Сегодня" bucket, same as buildDueQueue's own due<=t check,
+// rather than splitting out separate past dates nobody needs to see.
+function renderScheduleTable(){
+  var today = todayStr();
+  var tomorrow = addDays(today, 1);
+  var entries = poolEntries();
+  var groups = {};
+  entries.forEach(function(e){
+    var p = state.progress[entryProgKey(e)];
+    var key = p.due <= today ? today : p.due;
+    (groups[key] = groups[key] || []).push({e:e, p:p});
+  });
+  var dateKeys = Object.keys(groups).sort();
+
+  document.getElementById("statsSummary").innerHTML =
+    '<div class="chip">Слов в графике <b>'+entries.length+'</b></div>'+
+    '<div class="chip">Дней вперёд <b>'+dateKeys.length+'</b></div>';
+
+  function dateLabel(key){
+    if(key===today) return "Сегодня";
+    if(key===tomorrow) return "Завтра";
+    var d = new Date(key+"T00:00:00");
+    return d.getDate()+" "+RU_MONTHS[d.getMonth()];
+  }
+
+  var html = "";
+  dateKeys.forEach(function(key){
+    var rows = groups[key];
+    rows.sort(function(a,b){
+      if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
+        return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
+      }
+      return a.e.word[0].localeCompare(b.e.word[0]);
+    });
+    html += '<div class="stats-section-head">'+dateLabel(key)+' ('+rows.length+')</div>';
+    rows.forEach(function(r){ html += wordRowHtml(r.e, r.p, null); });
+  });
+  document.getElementById("statsTable").innerHTML = html;
+}
+
+function openStatsOverlay(mode){
+  document.getElementById("statsTitle").textContent = mode==="schedule" ? "График повторений" : "Статистика по словам";
+  if(mode==="schedule") renderScheduleTable(); else renderStatsTable();
+  statsOverlay.hidden = false;
 }
 
 var statsOverlay = document.getElementById("statsOverlay");
 document.getElementById("statsBtn").onclick = function(){
   if(!state) return;
-  renderStatsTable();
-  statsOverlay.hidden = false;
+  openStatsOverlay("boxes");
 };
 document.getElementById("closeStatsBtn").onclick = function(){ statsOverlay.hidden = true; };
 statsOverlay.addEventListener("click", function(e){ if(e.target===statsOverlay) statsOverlay.hidden = true; });

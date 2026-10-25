@@ -1548,9 +1548,7 @@ function renderSummary(isFinal){
 }
 
 function updateFooterNote(){
-  var el = document.getElementById("footerNote");
-  el.hidden = false;
-  el.textContent = (useDb ? "Прогресс: общее облако" : "Прогресс: только в этом браузере")+(dbDiag ? " ("+dbDiag+")" : "");
+  document.getElementById("footerNote").hidden = true;
 }
 
 function startSession(){

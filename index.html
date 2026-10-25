@@ -1127,7 +1127,7 @@ function renderStats(){
 // grouped by actual due date instead.
 statsRow.addEventListener("click", function(e){
   if(!state) return;
-  if(e.target.closest("#chipLearned")) openStatsOverlay("boxes");
+  if(e.target.closest("#chipLearned")) openStatsOverlay("learned");
   else if(e.target.closest("#chipToday")) openStatsOverlay("schedule");
 });
 
@@ -1782,9 +1782,44 @@ function renderScheduleTable(){
   document.getElementById("statsTable").innerHTML = html;
 }
 
+// Simple two-way split for the "Выучено" chip — distinct from the detailed
+// 5-box breakdown (renderStatsTable, still reachable via the bar-chart
+// icon): just which words are learned and which aren't yet, matching what
+// was actually asked for instead of the fuller/busier view.
+function renderLearnedTable(){
+  var entries = poolEntries();
+  var learned = [], notLearned = [];
+  entries.forEach(function(e){
+    var p = state.progress[entryProgKey(e)];
+    (p.learned ? learned : notLearned).push({e:e, p:p});
+  });
+  function byName(a, b){
+    if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
+      return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
+    }
+    return a.e.word[0].localeCompare(b.e.word[0]);
+  }
+  learned.sort(byName);
+  notLearned.sort(byName);
+
+  document.getElementById("statsSummary").innerHTML =
+    '<div class="chip">Выучено <b>'+learned.length+'/'+entries.length+'</b></div>';
+
+  var html = '<div class="stats-section-head">Выучено ('+learned.length+')</div>';
+  html += learned.length
+    ? learned.map(function(r){ return wordRowHtml(r.e, r.p, null); }).join("")
+    : '<p class="hint" style="padding:10px 4px;">Пока ни одного — учи дальше</p>';
+  html += '<div class="stats-section-head">Ещё учу ('+notLearned.length+')</div>';
+  html += notLearned.map(function(r){ return wordRowHtml(r.e, r.p, null); }).join("");
+  document.getElementById("statsTable").innerHTML = html;
+}
+
 function openStatsOverlay(mode){
-  document.getElementById("statsTitle").textContent = mode==="schedule" ? "График повторений" : "Статистика по словам";
-  if(mode==="schedule") renderScheduleTable(); else renderStatsTable();
+  var titles = {schedule:"График повторений", learned:"Выучено / ещё учу"};
+  document.getElementById("statsTitle").textContent = titles[mode] || "Статистика по словам";
+  if(mode==="schedule") renderScheduleTable();
+  else if(mode==="learned") renderLearnedTable();
+  else renderStatsTable();
   statsOverlay.hidden = false;
 }
 

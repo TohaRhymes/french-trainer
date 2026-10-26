@@ -105,6 +105,19 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .iconbtn:hover{color:var(--ink);background:var(--surface-2);}
 .iconbtn svg{width:17px;height:17px;}
 
+/* On a phone the icon row + deck-select + stats chips eat most of the
+   screen before you even see a card. Below 480px they collapse behind one
+   toggle button; above it, nothing changes (the toggle itself stays
+   hidden and .expanded is never toggled). */
+.mobile-toggle{display:none;}
+.mobile-toggle svg{transition:transform .15s ease;}
+.toprow.expanded .mobile-toggle svg{transform:rotate(180deg);}
+@media (max-width:480px){
+  .mobile-toggle{display:flex;}
+  .toprow:not(.expanded) .icon-group{display:none;}
+  .toprow:not(.expanded) .filterbar{display:none;}
+}
+
 .deck-select{
   font:inherit;font-size:.85rem;padding:8px 30px 8px 12px;border-radius:999px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink);width:auto;max-width:100%;flex:0 1 auto;
@@ -146,8 +159,11 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 }
 @media (max-width: 480px){
   /* below this, 220px-wide columns would squeeze instead of wrap, and
-     choice text/inputs get cramped — stack full-width instead */
-  .fields-row{flex-direction:column;}
+     choice text/inputs get cramped — stack full-width instead. align-items
+     was still the default (flex-start), so each field only ever sized to
+     its own content instead of filling the row — that's what made inputs
+     and choice buttons look like they only took up half the screen width. */
+  .fields-row{flex-direction:column;align-items:stretch;}
   .field{flex-basis:auto;}
 }
 @media (min-width:481px){
@@ -327,6 +343,9 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
   <div class="toprow">
     <div class="topbar">
       <div class="title">Eml<em>ék</em> | запоминание слов</div>
+      <button class="iconbtn mobile-toggle" id="mobileToggleBtn" title="Показать панель" aria-label="Показать панель">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
       <div class="icon-group">
         <button class="iconbtn" id="statsBtn" title="Статистика по словам" aria-label="Статистика по словам">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10"/><path d="M11 19V5"/><path d="M18 19v-7"/></svg>
@@ -1298,6 +1317,10 @@ function renderCard(){
         patchState(patch);
       }
       renderStats();
+      // one click should be enough: score it as clean and move straight on,
+      // instead of making her also hit "Следующее слово"/"Итог" separately.
+      var advanceBtn = document.getElementById("advanceBtn");
+      if(advanceBtn) advanceBtn.click();
     }
   };
 
@@ -1353,6 +1376,11 @@ function renderCard(){
       }
       input.addEventListener("input", function(){ input.classList.remove("wrong"); });
       input.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); attemptField(field, input.value, null); } });
+      // mousedown (not click) fires before the browser shifts focus away
+      // from the input — preventDefault here stops that focus change, so
+      // the input never blurs and the on-screen keyboard stays open while
+      // she taps "подсказка"/"показать ответ".
+      hintBtn.addEventListener("mousedown", function(ev){ ev.preventDefault(); });
       hintBtn.onclick = function(){
         if(hinted[field] || resolved[field]) return;
         hinted[field] = true;
@@ -1364,13 +1392,30 @@ function renderCard(){
         if(label){ label.textContent = "Начинается на: "+hintSeed(answer)+"…"; label.hidden = false; }
       };
       var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
+      revealBtn.addEventListener("mousedown", function(ev){ ev.preventDefault(); });
       revealBtn.onclick = function(){ revealField(field); };
     }
   });
 
   // auto-focus the first empty typing field, if any
   var firstInput = cardArea.querySelector(".type-input");
-  if(firstInput) firstInput.focus({preventScroll:true});
+  if(firstInput) focusField(firstInput);
+}
+
+// On a phone the on-screen keyboard covers the bottom of the viewport, so
+// a field that's focused without scrolling can end up hidden underneath
+// it. Desktop keeps the old preventScroll:true (no keyboard, no reason to
+// ever move the page), mobile instead focuses and then scrolls the field
+// to the middle of whatever's left above the keyboard.
+function isMobileLayout(){ return window.matchMedia("(max-width:480px)").matches; }
+function focusField(el){
+  if(!el) return;
+  if(isMobileLayout()){
+    el.focus();
+    setTimeout(function(){ el.scrollIntoView({block:"center", behavior:"smooth"}); }, 50);
+  } else {
+    el.focus({preventScroll:true});
+  }
 }
 
 function focusOtherField(field){
@@ -1382,7 +1427,7 @@ function focusOtherField(field){
     var f = fields[(idx+step)%fields.length];
     if(!resolved[f]){
       var inp = document.getElementById("input-"+f);
-      if(inp){ inp.focus({preventScroll:true}); return; }
+      if(inp){ focusField(inp); return; }
     }
   }
 }
@@ -1525,6 +1570,10 @@ function finishWordRound(){
   }
   row.appendChild(cont);
   cardArea.appendChild(row);
+
+  if(isMobileLayout()){
+    setTimeout(function(){ cont.scrollIntoView({block:"center", behavior:"smooth"}); }, 50);
+  }
 }
 
 function applyProgress(clean){
@@ -1822,6 +1871,11 @@ function openStatsOverlay(mode){
   else renderStatsTable();
   statsOverlay.hidden = false;
 }
+
+var mobileToggleBtn = document.getElementById("mobileToggleBtn");
+mobileToggleBtn.onclick = function(){
+  document.querySelector(".toprow").classList.toggle("expanded");
+};
 
 var statsOverlay = document.getElementById("statsOverlay");
 document.getElementById("statsBtn").onclick = function(){

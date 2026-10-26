@@ -93,6 +93,12 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 @media (min-width:820px){ .wrap{max-width:680px;} }
 /* One pill-shaped toolbar instead of 3 separate floating circles with gaps
    between them — same 3 actions, but reads as one grouped control. */
+/* Groups the toggle and the icon row as one unit on the right of .topbar,
+   so .topbar's own space-between only ever sees two children (title, this
+   group) — otherwise the toggle button's own position shifted between
+   "last child" (collapsed, icon-group gone) and "middle child" (expanded,
+   icon-group back) every time it was pressed. */
+.topbar-actions{display:flex;align-items:center;gap:8px;flex:none;}
 .icon-group{
   display:flex;gap:2px;flex:none;
   background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;
@@ -343,9 +349,7 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
   <div class="toprow">
     <div class="topbar">
       <div class="title">Eml<em>ék</em> | запоминание слов</div>
-      <button class="iconbtn mobile-toggle" id="mobileToggleBtn" title="Показать панель" aria-label="Показать панель">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
+      <div class="topbar-actions">
       <div class="icon-group">
         <button class="iconbtn" id="statsBtn" title="Статистика по словам" aria-label="Статистика по словам">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10"/><path d="M11 19V5"/><path d="M18 19v-7"/></svg>
@@ -356,6 +360,10 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
         <button class="iconbtn" id="catalogBtn" title="Доступные наборы" aria-label="Доступные наборы">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         </button>
+      </div>
+      <button class="iconbtn mobile-toggle" id="mobileToggleBtn" title="Показать панель" aria-label="Показать панель">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
       </div>
     </div>
 
@@ -1318,7 +1326,7 @@ function renderCard(){
       }
       renderStats();
       // one click should be enough: score it as clean and move straight on,
-      // instead of making her also hit "Следующее слово"/"Итог" separately.
+      // instead of making her also hit "Дальше"/"Итог" separately.
       var advanceBtn = document.getElementById("advanceBtn");
       if(advanceBtn) advanceBtn.click();
     }
@@ -1412,7 +1420,12 @@ function focusField(el){
   if(!el) return;
   if(isMobileLayout()){
     el.focus();
-    setTimeout(function(){ el.scrollIntoView({block:"center", behavior:"smooth"}); }, 50);
+    // "center" measures against the full layout viewport, which doesn't
+    // know the on-screen keyboard is about to cover its bottom half — that
+    // centered the field too low once the keyboard actually opened.
+    // "nearest" only scrolls the minimum needed to bring it into view at
+    // all, so it doesn't fight the keyboard's own resize.
+    setTimeout(function(){ el.scrollIntoView({block:"nearest", behavior:"smooth"}); }, 50);
   } else {
     el.focus({preventScroll:true});
   }
@@ -1515,7 +1528,7 @@ cardArea.addEventListener("click", function(e){
   if(btn) speakFR(btn.dataset.word);
 });
 
-// Enter = "Следующее слово"/"Итог"/"Продолжить" once one of those is on
+// Enter = "Дальше"/"Итог"/"Продолжить" once one of those is on
 // screen. Skipped when defaultPrevented - that means this same Enter
 // keypress was just used by a type-input's own handler to check an
 // answer (see the input's own "keydown" listener below), so it isn't
@@ -1550,7 +1563,7 @@ function finishWordRound(){
   var cont = document.createElement("button");
   cont.className = "btn primary";
   cont.id = "advanceBtn";
-  cont.textContent = atBoundary ? "Итог" : "Следующее слово";
+  cont.textContent = atBoundary ? "Итог" : "Дальше";
   cont.onclick = function(){
     if(atBoundary) renderSummary(queue.length===0);
     else nextWord();

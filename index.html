@@ -577,6 +577,36 @@ var DEFAULT_DECKS = {
       ["devoir",["dois","dois","doit","devons","devez","doivent"],"быть должным, быть обязанным"],
       ["partir",["pars","pars","part","partons","partez","partent"],"уезжать, уходить"]
     ]
+  },
+  "nombres-ch": {
+    name: "Числа",
+    kind: "number",
+    autoAdd: true,
+    // word shape: [stand­art FR, variante CH (suisse), chiffre]. Pour la
+    // plupart des nombres les deux colonnes sont identiques — seuls 70/80/90
+    // diffèrent entre le français standard et le français de Suisse.
+    words: [
+      ["zéro","zéro","0"],["un","un","1"],["deux","deux","2"],["trois","trois","3"],
+      ["quatre","quatre","4"],["cinq","cinq","5"],["six","six","6"],["sept","sept","7"],
+      ["huit","huit","8"],["neuf","neuf","9"],["dix","dix","10"],["onze","onze","11"],
+      ["douze","douze","12"],["treize","treize","13"],["quatorze","quatorze","14"],
+      ["quinze","quinze","15"],["seize","seize","16"],["dix-sept","dix-sept","17"],
+      ["dix-huit","dix-huit","18"],["dix-neuf","dix-neuf","19"],["vingt","vingt","20"],
+      ["trente","trente","30"],["quarante","quarante","40"],["cinquante","cinquante","50"],
+      ["soixante","soixante","60"],["soixante-dix","septante","70"],
+      ["quatre-vingts","huitante, quatre-vingts","80"],["quatre-vingt-dix","nonante","90"],
+      ["cent","cent","100"]
+    ]
+  },
+  "jours-semaine": {
+    name: "Дни недели",
+    kind: "word",
+    autoAdd: true,
+    words: [
+      ["lundi","понедельник"],["mardi","вторник"],["mercredi","среда"],
+      ["jeudi","четверг"],["vendredi","пятница"],["samedi","суббота"],
+      ["dimanche","воскресенье"]
+    ]
   }
 };
 
@@ -852,7 +882,7 @@ function availableDeckIds(){
   return Object.keys(DEFAULT_DECKS).filter(function(id){ return !state.decks[id]; });
 }
 function kindLabel(kind){
-  return kind==="verb" ? "глаголов" : kind==="cloze" ? "фраз" : kind==="conjug" ? "спряжений" : "слов";
+  return kind==="verb" ? "глаголов" : kind==="number" ? "чисел" : kind==="cloze" ? "фраз" : kind==="conjug" ? "спряжений" : "слов";
 }
 function adoptDeck(deckId){
   if(state.decks[deckId]) return;
@@ -948,7 +978,7 @@ var CONJUG_LABELS = {je:"Je", tu:"Tu", elle:"Elle", nous:"Nous", vous:"Vous", el
 var CONJUG_PRONOUNS = {je:"je", tu:"tu", elle:"elle", nous:"nous", vous:"vous", elles:"elles"};
 
 function requiredFields(e){
-  if(e.kind==="verb") return ["a","b"];
+  if(e.kind==="verb" || e.kind==="number") return ["a","b"];
   if(e.kind==="conjug") return CONJUG_FIELDS;
   return ["a"];
 }
@@ -958,19 +988,21 @@ function requiredFields(e){
 // (prepositions/articles aren't confusable by spelling the way vocabulary
 // is, so the prefix/suffix similarity scoring doesn't apply here).
 function fieldAnswer(e, field){
-  if(e.kind==="verb") return field==="a" ? e.word[0] : e.word[1];
+  if(e.kind==="verb" || e.kind==="number") return field==="a" ? e.word[0] : e.word[1];
   if(e.kind==="cloze") return e.word[1];
   if(e.kind==="conjug") return e.word[1][CONJUG_IDX[field]];
   return e.direction==="ru2fr" ? e.word[0] : e.word[1];
 }
 function fieldLabel(e, field){
   if(e.kind==="verb") return field==="a" ? "Инфинитив" : "Причастие";
+  if(e.kind==="number") return field==="a" ? "Французский (FR)" : "Французский (CH)";
   if(e.kind==="cloze") return "Пропуск";
   if(e.kind==="conjug") return CONJUG_LABELS[field];
   return e.direction==="ru2fr" ? "Французский" : "Русский";
 }
 function answerIsFrench(e, field){
   if(e.kind==="verb") return true;
+  if(e.kind==="number") return true;
   if(e.kind==="cloze") return true;
   if(e.kind==="conjug") return true;
   return e.direction==="ru2fr";
@@ -979,7 +1011,7 @@ function answerIsFrench(e, field){
 // was the Russian translation (direction "fr2ru") — unlike answerIsFrench,
 // which governs the accent-helper row and is about what she *typed*.
 function frenchAudioFor(e, field){
-  if(e.kind==="verb") return fieldAnswer(e, field);
+  if(e.kind==="verb" || e.kind==="number") return fieldAnswer(e, field);
   // Most cloze prompts are "phrase with ___" — speak it filled in. A few
   // ("de + le = ?") have no blank to fill, so just speak the answer.
   if(e.kind==="cloze") return e.word[0].indexOf("___")!==-1 ? e.word[0].replace("___", e.word[1]) : e.word[1];
@@ -988,12 +1020,14 @@ function frenchAudioFor(e, field){
 }
 function promptText(e){
   if(e.kind==="verb") return e.word[2];
+  if(e.kind==="number") return e.word[2];
   if(e.kind==="cloze") return e.word[0];
   if(e.kind==="conjug") return e.word[0];
   return e.direction==="ru2fr" ? e.word[1] : e.word[0];
 }
 function promptEyebrow(e){
   if(e.kind==="verb") return "Переведи на французский";
+  if(e.kind==="number") return "Напиши число по-французски (FR и CH)";
   if(e.kind==="cloze") return "Вставь пропущенное слово";
   if(e.kind==="conjug") return "Проспрягай в настоящем времени (présent)";
   return e.direction==="ru2fr" ? "Переведи на французский" : "Переведи на русский";
@@ -1110,7 +1144,7 @@ function distractorsFor(entry, field, correctAnswer){
   var seen = {}; var candidates = [];
   deckWords.forEach(function(w){
     if(w===entry.word) return;
-    var val = entry.kind==="verb"
+    var val = (entry.kind==="verb" || entry.kind==="number")
       ? (field==="a" ? w[0] : w[1])
       : (entry.direction==="ru2fr" ? w[0] : w[1]);
     var n = normalize(val);
@@ -1734,6 +1768,8 @@ function daysBetween(fromStr, toStr){
 function wordRowHtml(e, p, trailingLabel){
   var wordsLine = e.kind==="verb"
     ? '<span class="inf">'+e.word[0]+'</span><span class="sep">→</span>'+e.word[1]+'<span class="sep">—</span>'+e.word[2]
+    : e.kind==="number"
+    ? '<span class="inf">'+e.word[2]+'</span><span class="sep">—</span>'+e.word[0]+' / '+e.word[1]
     : e.kind==="conjug"
     ? '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[2]
     : '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[1];
@@ -1988,6 +2024,8 @@ function showDeckForEdit(deckId){
   var deck = state.decks[deckId];
   editFormatHint.textContent = deck.kind==="verb"
     ? "Формат: infinitif;participe passé;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
+    : deck.kind==="number"
+    ? "Формат: вариант FR;вариант CH;число — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : deck.kind==="cloze"
     ? "Формат: фраза с ___;ответ;ловушка1|ловушка2|ловушка3;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : deck.kind==="conjug"
@@ -2033,7 +2071,7 @@ document.getElementById("saveEditBtn").onclick = function(){
   var lines = editArea.value.split("\n").map(function(l){ return l.trim(); }).filter(Boolean);
   var words = lines.map(function(l){
     var parts = l.split(";").map(function(p){ return p.trim(); });
-    if(kind==="verb") return [parts[0]||"", parts[1]||"", parts[2]||""];
+    if(kind==="verb" || kind==="number") return [parts[0]||"", parts[1]||"", parts[2]||""];
     if(kind==="cloze") return [parts[0]||"", parts[1]||"", (parts[2]||"").split("|").map(function(d){ return d.trim(); }).filter(Boolean), parts[3]||""];
     if(kind==="conjug") return [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||""];
     return [parts[0]||"", parts[1]||""];

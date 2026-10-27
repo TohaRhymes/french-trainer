@@ -978,7 +978,12 @@ var CONJUG_LABELS = {je:"Je", tu:"Tu", elle:"Elle", nous:"Nous", vous:"Vous", el
 var CONJUG_PRONOUNS = {je:"je", tu:"tu", elle:"elle", nous:"nous", vous:"vous", elles:"elles"};
 
 function requiredFields(e){
-  if(e.kind==="verb" || e.kind==="number") return ["a","b"];
+  if(e.kind==="verb") return ["a","b"];
+  // Most numbers spell the same way in standard and Swiss French — only
+  // 70/80/90 (and their compounds) actually differ — so only those entries
+  // (word[0]!==word[1]) get a second field; the rest behave like a single
+  // plain word.
+  if(e.kind==="number") return e.word[0]===e.word[1] ? ["a"] : ["a","b"];
   if(e.kind==="conjug") return CONJUG_FIELDS;
   return ["a"];
 }
@@ -995,7 +1000,7 @@ function fieldAnswer(e, field){
 }
 function fieldLabel(e, field){
   if(e.kind==="verb") return field==="a" ? "Инфинитив" : "Причастие";
-  if(e.kind==="number") return field==="a" ? "Французский (FR)" : "Французский (CH)";
+  if(e.kind==="number") return e.word[0]===e.word[1] ? "Французский" : (field==="a" ? "Французский (FR)" : "Французский (CH)");
   if(e.kind==="cloze") return "Пропуск";
   if(e.kind==="conjug") return CONJUG_LABELS[field];
   return e.direction==="ru2fr" ? "Французский" : "Русский";
@@ -1769,7 +1774,7 @@ function wordRowHtml(e, p, trailingLabel){
   var wordsLine = e.kind==="verb"
     ? '<span class="inf">'+e.word[0]+'</span><span class="sep">→</span>'+e.word[1]+'<span class="sep">—</span>'+e.word[2]
     : e.kind==="number"
-    ? '<span class="inf">'+e.word[2]+'</span><span class="sep">—</span>'+e.word[0]+' / '+e.word[1]
+    ? '<span class="inf">'+e.word[2]+'</span><span class="sep">—</span>'+(e.word[0]===e.word[1] ? e.word[0] : e.word[0]+' / '+e.word[1])
     : e.kind==="conjug"
     ? '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[2]
     : '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[1];

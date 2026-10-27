@@ -582,9 +582,9 @@ var DEFAULT_DECKS = {
     name: "Числа",
     kind: "number",
     autoAdd: true,
-    // word shape: [stand­art FR, variante CH (suisse), chiffre]. Pour la
+    // word shape: [variante CH (suisse), standart FR, chiffre]. Pour la
     // plupart des nombres les deux colonnes sont identiques — seuls 70/80/90
-    // diffèrent entre le français standard et le français de Suisse.
+    // diffèrent entre le français de Suisse et le français standard.
     words: [
       ["zéro","zéro","0"],["un","un","1"],["deux","deux","2"],["trois","trois","3"],
       ["quatre","quatre","4"],["cinq","cinq","5"],["six","six","6"],["sept","sept","7"],
@@ -593,8 +593,8 @@ var DEFAULT_DECKS = {
       ["quinze","quinze","15"],["seize","seize","16"],["dix-sept","dix-sept","17"],
       ["dix-huit","dix-huit","18"],["dix-neuf","dix-neuf","19"],["vingt","vingt","20"],
       ["trente","trente","30"],["quarante","quarante","40"],["cinquante","cinquante","50"],
-      ["soixante","soixante","60"],["soixante-dix","septante","70"],
-      ["quatre-vingts","huitante","80"],["quatre-vingt-dix","nonante","90"],
+      ["soixante","soixante","60"],["septante","soixante-dix","70"],
+      ["huitante","quatre-vingts","80"],["nonante","quatre-vingt-dix","90"],
       ["cent","cent","100"]
     ]
   },
@@ -1000,7 +1000,7 @@ function fieldAnswer(e, field){
 }
 function fieldLabel(e, field){
   if(e.kind==="verb") return field==="a" ? "Инфинитив" : "Причастие";
-  if(e.kind==="number") return e.word[0]===e.word[1] ? "Французский" : (field==="a" ? "Французский (FR)" : "Французский (CH)");
+  if(e.kind==="number") return e.word[0]===e.word[1] ? "Французский" : (field==="a" ? "Швейцарский" : "Французский");
   if(e.kind==="cloze") return "Пропуск";
   if(e.kind==="conjug") return CONJUG_LABELS[field];
   return e.direction==="ru2fr" ? "Французский" : "Русский";

@@ -191,6 +191,17 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   .conjug-grid .speakmini svg{width:11px;height:11px;}
 }
 .field-label{font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted);display:flex;justify-content:space-between;align-items:center;}
+.conjug-tr{
+  flex:1;min-width:0;margin:0 10px;text-align:right;text-transform:none;letter-spacing:normal;
+  font-size:.8rem;color:var(--ink-muted);opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+@media (max-width:480px){
+  /* Desktop-only hint: on a narrow phone screen the field is already tight
+     (pronoun + hint/reveal/accent buttons), so this would either get
+     truncated to nothing useful or crowd the row — just the dictionary
+     translation under the eyebrow stays, same as any other deck. */
+  .conjug-tr{display:none;}
+}
 
 .choices{display:flex;flex-direction:column;gap:7px;}
 .choice-btn{
@@ -559,24 +570,42 @@ var DEFAULT_DECKS = {
     kind: "conjug",
     autoAdd: true,
     words: [
-      ["être",["suis","es","est","sommes","êtes","sont"],"быть"],
-      ["avoir",["ai","as","a","avons","avez","ont"],"иметь"],
-      ["aller",["vais","vas","va","allons","allez","vont"],"идти, ехать"],
-      ["pouvoir",["peux","peux","peut","pouvons","pouvez","peuvent"],"мочь"],
-      ["vouloir",["veux","veux","veut","voulons","voulez","veulent"],"хотеть"],
-      ["prendre",["prends","prends","prend","prenons","prenez","prennent"],"брать"],
-      ["comprendre",["comprends","comprends","comprend","comprenons","comprenez","comprennent"],"понимать"],
-      ["apprendre",["apprends","apprends","apprend","apprenons","apprenez","apprennent"],"учить, узнавать"],
-      ["connaître",["connais","connais","connaît","connaissons","connaissez","connaissent"],"знать (кого-то), быть знакомым"],
-      ["venir",["viens","viens","vient","venons","venez","viennent"],"приходить, приезжать"],
-      ["faire",["fais","fais","fait","faisons","faites","font"],"делать"],
-      ["dire",["dis","dis","dit","disons","dites","disent"],"говорить, сказать"],
-      ["mettre",["mets","mets","met","mettons","mettez","mettent"],"класть, ставить"],
-      ["voir",["vois","vois","voit","voyons","voyez","voient"],"видеть"],
-      ["savoir",["sais","sais","sait","savons","savez","savent"],"знать (факты)"],
-      ["devoir",["dois","dois","doit","devons","devez","doivent"],"быть должным, быть обязанным"],
-      ["partir",["pars","pars","part","partons","partez","partent"],"уезжать, уходить"],
-      ["recevoir",["reçois","reçois","reçoit","recevons","recevez","reçoivent"],"получать"]
+      ["être",["suis","es","est","sommes","êtes","sont"],"быть",
+        ["я есть","ты есть","он есть","мы есть","вы есть","они есть"]],
+      ["avoir",["ai","as","a","avons","avez","ont"],"иметь",
+        ["я имею","ты имеешь","он имеет","мы имеем","вы имеете","они имеют"]],
+      ["aller",["vais","vas","va","allons","allez","vont"],"идти, ехать",
+        ["я иду","ты идёшь","он идёт","мы идём","вы идёте","они идут"]],
+      ["pouvoir",["peux","peux","peut","pouvons","pouvez","peuvent"],"мочь",
+        ["я могу","ты можешь","он может","мы можем","вы можете","они могут"]],
+      ["vouloir",["veux","veux","veut","voulons","voulez","veulent"],"хотеть",
+        ["я хочу","ты хочешь","он хочет","мы хотим","вы хотите","они хотят"]],
+      ["prendre",["prends","prends","prend","prenons","prenez","prennent"],"брать",
+        ["я беру","ты берёшь","он берёт","мы берём","вы берёте","они берут"]],
+      ["comprendre",["comprends","comprends","comprend","comprenons","comprenez","comprennent"],"понимать",
+        ["я понимаю","ты понимаешь","он понимает","мы понимаем","вы понимаете","они понимают"]],
+      ["apprendre",["apprends","apprends","apprend","apprenons","apprenez","apprennent"],"учить, узнавать",
+        ["я учу","ты учишь","он учит","мы учим","вы учите","они учат"]],
+      ["connaître",["connais","connais","connaît","connaissons","connaissez","connaissent"],"знать (кого-то), быть знакомым",
+        ["я знаю","ты знаешь","он знает","мы знаем","вы знаете","они знают"]],
+      ["venir",["viens","viens","vient","venons","venez","viennent"],"приходить, приезжать",
+        ["я прихожу","ты приходишь","он приходит","мы приходим","вы приходите","они приходят"]],
+      ["faire",["fais","fais","fait","faisons","faites","font"],"делать",
+        ["я делаю","ты делаешь","он делает","мы делаем","вы делаете","они делают"]],
+      ["dire",["dis","dis","dit","disons","dites","disent"],"говорить, сказать",
+        ["я говорю","ты говоришь","он говорит","мы говорим","вы говорите","они говорят"]],
+      ["mettre",["mets","mets","met","mettons","mettez","mettent"],"класть, ставить",
+        ["я кладу","ты кладёшь","он кладёт","мы кладём","вы кладёте","они кладут"]],
+      ["voir",["vois","vois","voit","voyons","voyez","voient"],"видеть",
+        ["я вижу","ты видишь","он видит","мы видим","вы видите","они видят"]],
+      ["savoir",["sais","sais","sait","savons","savez","savent"],"знать (факты)",
+        ["я знаю","ты знаешь","он знает","мы знаем","вы знаете","они знают"]],
+      ["devoir",["dois","dois","doit","devons","devez","doivent"],"быть должным, быть обязанным",
+        ["я должен","ты должен","он должен","мы должны","вы должны","они должны"]],
+      ["partir",["pars","pars","part","partons","partez","partent"],"уезжать, уходить",
+        ["я уезжаю","ты уезжаешь","он уезжает","мы уезжаем","вы уезжаете","они уезжают"]],
+      ["recevoir",["reçois","reçois","reçoit","recevons","recevez","reçoivent"],"получать",
+        ["я получаю","ты получаешь","он получает","мы получаем","вы получаете","они получают"]]
     ]
   },
   "nombres-ch": {
@@ -1039,6 +1068,15 @@ function fieldLabel(e, field){
   if(e.kind==="conjug") return CONJUG_LABELS[field];
   return e.direction==="ru2fr" ? "Французский" : "Русский";
 }
+// Desktop-only: the per-person Russian gloss shown next to the pronoun on a
+// conjugation card ("Je" → "я делаю"), so she doesn't have to hold the whole
+// paradigm's translation in her head while typing each form. word[3] is
+// absent on older/legacy verb entries, so this degrades to nothing rather
+// than throwing.
+function conjugTranslation(e, field){
+  if(e.kind!=="conjug" || !e.word[3]) return "";
+  return e.word[3][CONJUG_IDX[field]] || "";
+}
 function answerIsFrench(e, field){
   if(e.kind==="verb") return true;
   if(e.kind==="number") return true;
@@ -1265,8 +1303,11 @@ function fieldBlock(entry, field){
   var answer = fieldAnswer(entry, field);
   var label = fieldLabel(entry, field);
   var needsAccent = mode==="type" && answerIsFrench(entry, field);
+  var tr = conjugTranslation(entry, field);
   var html = '<div class="field" data-field="'+field+'">'+
-    '<div class="field-label"><span>'+label+'</span><span class="field-actions">'+
+    '<div class="field-label"><span>'+label+'</span>'+
+      (tr ? '<span class="conjug-tr">'+tr+'</span>' : '')+
+      '<span class="field-actions">'+
       '<button type="button" class="hintbtn" data-field="'+field+'" title="Подсказка (без балла)">?</button>'+
       (mode==="type" ? '<button type="button" class="revealbtn" data-field="'+field+'" title="Показать ответ (без балла)">👁</button>' : '')+
       (needsAccent ? '<button type="button" class="accentbtn" data-field="'+field+'" title="Показать спецсимволы">é</button>' : '')+
@@ -2068,11 +2109,11 @@ function showDeckForEdit(deckId){
     : deck.kind==="cloze"
     ? "Формат: фраза с ___;ответ;ловушка1|ловушка2|ловушка3;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : deck.kind==="conjug"
-    ? "Формат: infinitif;je|tu|il|nous|vous|ils;перевод — по одной строке (6 форм через |, в этом порядке). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
+    ? "Формат: infinitif;je|tu|il|nous|vous|ils;перевод;я…|ты…|он…|мы…|вы…|они… — по одной строке (6 форм через |, в этом порядке; последняя часть с переводом по лицам необязательна — показывается рядом с местоимением на компьютере). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : "Формат: слово;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится.";
   editArea.value = deck.words.map(function(w){
     if(deck.kind==="cloze") return [w[0], w[1], w[2].join("|"), w[3]].join(";");
-    if(deck.kind==="conjug") return [w[0], w[1].join("|"), w[2]].join(";");
+    if(deck.kind==="conjug") return [w[0], w[1].join("|"), w[2]].join(";") + (w[3] ? ";"+w[3].join("|") : "");
     return w.join(";");
   }).join("\n");
 }
@@ -2112,7 +2153,9 @@ document.getElementById("saveEditBtn").onclick = function(){
     var parts = l.split(";").map(function(p){ return p.trim(); });
     if(kind==="verb" || kind==="number") return [parts[0]||"", parts[1]||"", parts[2]||""];
     if(kind==="cloze") return [parts[0]||"", parts[1]||"", (parts[2]||"").split("|").map(function(d){ return d.trim(); }).filter(Boolean), parts[3]||""];
-    if(kind==="conjug") return [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||""];
+    if(kind==="conjug") return parts[3]
+      ? [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||"", parts[3].split("|").map(function(d){ return d.trim(); })]
+      : [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||""];
     return [parts[0]||"", parts[1]||""];
   }).filter(function(w){ return w[0]; });
   if(words.length){

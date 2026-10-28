@@ -1075,6 +1075,10 @@ function fieldLabel(e, field){
 // than throwing.
 function conjugTranslation(e, field){
   if(e.kind!=="conjug" || !e.word[3]) return "";
+  // At box 5 the whole point is recalling the verb from Russian alone —
+  // showing each form's Russian gloss here would hand back exactly what
+  // she's supposed to be retrieving from memory.
+  if(conjugShowsRussian(e)) return "";
   return e.word[3][CONJUG_IDX[field]] || "";
 }
 function answerIsFrench(e, field){
@@ -1095,18 +1099,24 @@ function frenchAudioFor(e, field){
   if(e.kind==="conjug") return CONJUG_PRONOUNS[field]+" "+fieldAnswer(e, field);
   return e.word[0];
 }
+// At box 5 (the last, most-practiced level) a conjug card shows the Russian
+// translation instead of the French infinitive — she has to recall the verb
+// herself before conjugating it, instead of having it handed to her.
+function conjugShowsRussian(e){ return e.kind==="conjug" && currentBox()>=5; }
 function promptText(e){
   if(e.kind==="verb") return e.word[2];
   if(e.kind==="number") return e.word[2];
   if(e.kind==="cloze") return e.word[0];
-  if(e.kind==="conjug") return e.word[0];
+  if(e.kind==="conjug") return conjugShowsRussian(e) ? e.word[2] : e.word[0];
   return e.direction==="ru2fr" ? e.word[1] : e.word[0];
 }
 function promptEyebrow(e){
   if(e.kind==="verb") return "Переведи на французский";
   if(e.kind==="number") return "Напиши число по-французски (FR и CH)";
   if(e.kind==="cloze") return "Вставь пропущенное слово";
-  if(e.kind==="conjug") return "Проспрягай в настоящем времени (présent)";
+  if(e.kind==="conjug") return conjugShowsRussian(e)
+    ? "Переведи на французский и проспрягай в настоящем времени (présent)"
+    : "Проспрягай в настоящем времени (présent)";
   return e.direction==="ru2fr" ? "Переведи на французский" : "Переведи на русский";
 }
 
@@ -1411,7 +1421,9 @@ function renderCard(){
   var isConjugType = current.kind==="conjug" && !isMatching;
   var fieldsHtml = isMatching ? renderMatchHtml(current) : fields.map(function(f){ return fieldBlock(current, f); }).join("");
   var deckName = state.decks[current.deckId].name;
-  var translationLine = current.kind==="cloze" ? current.word[3] : (current.kind==="conjug" ? current.word[2] : null);
+  // At box 5 the translation IS the main prompt (see conjugShowsRussian) —
+  // repeating it again here as a hint line would just show it twice.
+  var translationLine = current.kind==="cloze" ? current.word[3] : (current.kind==="conjug" && !conjugShowsRussian(current) ? current.word[2] : null);
 
   var html = ''+
     '<div class="eyebrow"><span>'+promptEyebrow(current)+(freePractice?' · свободно':'')+'</span><span class="box-dots">'+dots+'</span></div>'+

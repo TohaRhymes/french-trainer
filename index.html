@@ -362,9 +362,6 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
       <div class="title">Eml<em>ék</em> | запоминание слов</div>
       <div class="topbar-actions">
       <div class="icon-group">
-        <button class="iconbtn" id="statsBtn" title="Статистика по словам" aria-label="Статистика по словам">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10"/><path d="M11 19V5"/><path d="M18 19v-7"/></svg>
-        </button>
         <button class="iconbtn" id="editBtn" title="Наборы слов" aria-label="Наборы слов">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 13.5a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.56V20a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.56-1H4a2 2 0 110-4h.09a1.7 1.7 0 001.56-1 1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.87.34H10a1.7 1.7 0 001-1.56V4a2 2 0 114 0v.09a1.7 1.7 0 001 1.56 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87V10a1.7 1.7 0 001.56 1H20a2 2 0 110 4h-.09a1.7 1.7 0 00-1.56 1z"/></svg>
         </button>
@@ -945,7 +942,7 @@ function availableDeckIds(){
   return Object.keys(DEFAULT_DECKS).filter(function(id){ return !state.decks[id]; });
 }
 function kindLabel(kind){
-  return kind==="verb" ? "глаголов" : kind==="number" ? "чисел" : kind==="cloze" ? "фраз" : kind==="conjug" ? "спряжений" : "слов";
+  return "карточек";
 }
 function adoptDeck(deckId){
   if(state.decks[deckId]) return;
@@ -1896,22 +1893,28 @@ function renderStatsTable(){
 
   var rows = entries.map(function(e){ return {e:e, p: state.progress[entryProgKey(e)]}; });
   rows.sort(function(a,b){
-    if(a.p.box !== b.p.box) return a.p.box - b.p.box;
+    // Learned (box 5) first, then down through the ladder to the newest —
+    // what's already mastered is what she's checking on most often, so it
+    // leads instead of being buried at the bottom.
+    if(a.p.box !== b.p.box) return b.p.box - a.p.box;
     if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
       return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
     }
     return a.e.word[0].localeCompare(b.e.word[0]);
   });
 
-  // box -> {label, interval description}, matches INTERVALS above — grouping
-  // by box with a section header replaces the old flat list (one continuous
-  // wall of rows) so it's scannable at a glance instead of read top to bottom.
+  // box -> label, matches INTERVALS above — grouping by box with a section
+  // header replaces a flat list (one continuous wall of rows) so it's
+  // scannable at a glance instead of read top to bottom. Box 5's own repeat
+  // interval keeps growing per word instead of staying fixed (see
+  // applyProgress), so there's no one number to put here — each row's own
+  // trailing label already gives its real next date.
   var BOX_LABELS = {
     1: "Новые слова · показываются каждый день",
     2: "Бокс 2 · повтор через 1 день",
     3: "Бокс 3 · повтор через 3 дня",
     4: "Бокс 4 · повтор через неделю",
-    5: "Выучено · повтор от 2+ недель"
+    5: "Выучено · дата следующего повтора у каждого слова своя"
   };
 
   var html = "";
@@ -1972,43 +1975,10 @@ function renderScheduleTable(){
   document.getElementById("statsTable").innerHTML = html;
 }
 
-// Simple two-way split for the "Выучено" chip — distinct from the detailed
-// 5-box breakdown (renderStatsTable, still reachable via the bar-chart
-// icon): just which words are learned and which aren't yet, matching what
-// was actually asked for instead of the fuller/busier view.
-function renderLearnedTable(){
-  var entries = poolEntries();
-  var learned = [], notLearned = [];
-  entries.forEach(function(e){
-    var p = state.progress[entryProgKey(e)];
-    (p.learned ? learned : notLearned).push({e:e, p:p});
-  });
-  function byName(a, b){
-    if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
-      return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
-    }
-    return a.e.word[0].localeCompare(b.e.word[0]);
-  }
-  learned.sort(byName);
-  notLearned.sort(byName);
-
-  document.getElementById("statsSummary").innerHTML =
-    '<div class="chip">Выучено <b>'+learned.length+'/'+entries.length+'</b></div>';
-
-  var html = '<div class="stats-section-head">Выучено ('+learned.length+')</div>';
-  html += learned.length
-    ? learned.map(function(r){ return wordRowHtml(r.e, r.p, null); }).join("")
-    : '<p class="hint" style="padding:10px 4px;">Пока ни одного — учи дальше</p>';
-  html += '<div class="stats-section-head">Ещё учу ('+notLearned.length+')</div>';
-  html += notLearned.map(function(r){ return wordRowHtml(r.e, r.p, null); }).join("");
-  document.getElementById("statsTable").innerHTML = html;
-}
-
 function openStatsOverlay(mode){
-  var titles = {schedule:"График повторений", learned:"Выучено / ещё учу"};
+  var titles = {schedule:"График повторений"};
   document.getElementById("statsTitle").textContent = titles[mode] || "Статистика по словам";
   if(mode==="schedule") renderScheduleTable();
-  else if(mode==="learned") renderLearnedTable();
   else renderStatsTable();
   statsOverlay.hidden = false;
 }
@@ -2019,10 +1989,6 @@ mobileToggleBtn.onclick = function(){
 };
 
 var statsOverlay = document.getElementById("statsOverlay");
-document.getElementById("statsBtn").onclick = function(){
-  if(!state) return;
-  openStatsOverlay("boxes");
-};
 document.getElementById("closeStatsBtn").onclick = function(){ statsOverlay.hidden = true; };
 statsOverlay.addEventListener("click", function(e){ if(e.target===statsOverlay) statsOverlay.hidden = true; });
 

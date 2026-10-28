@@ -608,6 +608,33 @@ var DEFAULT_DECKS = {
       ["jeudi","четверг"],["vendredi","пятница"],["samedi","суббота"],
       ["dimanche","воскресенье"]
     ]
+  },
+  "meteo-ch": {
+    name: "Погода",
+    kind: "cloze",
+    autoAdd: true,
+    // startDueOffsetDays delays this deck's words so they aren't due the
+    // same day it lands in everyone's deck list — she asked for them to
+    // start tomorrow, not inflate today's queue.
+    startDueOffsetDays: 1,
+    words: [
+      ["Il ___ beau","fait",["y a","pleut","neige"],"хорошая погода"],
+      ["Il ne ___ pas beau","fait",["y a","pleut","neige"],"плохая погода"],
+      ["Il ___ mauvais","fait",["y a","pleut","neige"],"плохая погода"],
+      ["Il ___ chaud","fait",["y a","pleut","grêle"],"жарко"],
+      ["Il ___ bon","fait",["y a","pleut","neige"],"тепло, комфортно"],
+      ["Il ___ frais","fait",["y a","neige","grêle"],"прохладно"],
+      ["Il ___ froid","fait",["y a","pleut","grêle"],"холодно"],
+      ["Il ___ du soleil","y a",["fait","pleut","neige"],"солнечно"],
+      ["Il ___ des nuages","y a",["fait","pleut","grêle"],"облачно"],
+      ["Il ___ du vent","y a",["fait","pleut","neige"],"ветрено"],
+      ["Il ___ de l'orage","y a",["fait","neige","grêle"],"гроза"],
+      ["Il ___ un arc-en-ciel","y a",["fait","pleut","neige"],"радуга"],
+      ["Il ___ du brouillard","y a",["fait","pleut","grêle"],"туман"],
+      ["Il ___ 🌧️","pleut",["fait","y a","neige"],"идёт дождь"],
+      ["Il ___ ❄️","neige",["fait","y a","pleut"],"идёт снег"],
+      ["Il ___ 🧊","grêle",["fait","y a","neige"],"идёт град"]
+    ]
   }
 };
 
@@ -653,7 +680,13 @@ function pluralRu(n, forms){
 
 function wordKey(s){ return String(s).trim().toLowerCase(); }
 function deckProgKey(deckId, key){ return deckId+"::"+key; }
-function freshProgressEntry(){ return {box:1, due:todayStr(), learned:false}; }
+// A deck can set startDueOffsetDays (DEFAULT_DECKS) to delay when its words
+// first become due — e.g. a deck added mid-session that shouldn't inflate
+// today's queue the moment it's adopted, only from tomorrow on.
+function freshProgressEntry(deckId){
+  var offset = (deckId && DEFAULT_DECKS[deckId] && DEFAULT_DECKS[deckId].startDueOffsetDays) || 0;
+  return {box:1, due: offset ? addDays(todayStr(), offset) : todayStr(), learned:false};
+}
 
 function loadLocalStateIfAny(){
   try{
@@ -721,7 +754,7 @@ function normalizeState(raw){
     Object.keys(s.decks).forEach(function(deckId){
       s.decks[deckId].words.forEach(function(w){
         var key = deckProgKey(deckId, wordKey(w[0]));
-        if(!s.progress[key]) s.progress[key] = freshProgressEntry();
+        if(!s.progress[key]) s.progress[key] = freshProgressEntry(deckId);
       });
     });
     return s;
@@ -750,7 +783,7 @@ function normalizeState(raw){
     if(!DEFAULT_DECKS[deckId].autoAdd) return;
     var deck = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
     deck.words.forEach(function(w){
-      newProgress[deckProgKey(deckId, wordKey(w[0]))] = freshProgressEntry();
+      newProgress[deckProgKey(deckId, wordKey(w[0]))] = freshProgressEntry(deckId);
     });
     extraDecks[deckId] = deck;
   });
@@ -866,7 +899,7 @@ function mergeDeckWords(deckId, newWords){
   var deck = state.decks[deckId];
   newWords.forEach(function(w){
     var key = deckProgKey(deckId, wordKey(w[0]));
-    if(!state.progress[key]) state.progress[key] = freshProgressEntry();
+    if(!state.progress[key]) state.progress[key] = freshProgressEntry(deckId);
   });
   deck.words = newWords;
   saveState();
@@ -890,7 +923,7 @@ function adoptDeck(deckId){
   var deck = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
   deck.words.forEach(function(w){
     var key = deckProgKey(deckId, wordKey(w[0]));
-    if(!state.progress[key]) state.progress[key] = freshProgressEntry();
+    if(!state.progress[key]) state.progress[key] = freshProgressEntry(deckId);
   });
   state.decks[deckId] = deck;
   saveState();

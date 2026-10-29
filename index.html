@@ -1088,11 +1088,18 @@ function answerIsFrench(e, field){
 // The audio is always the French side, even when the field she just typed
 // was the Russian translation (direction "fr2ru") — unlike answerIsFrench,
 // which governs the accent-helper row and is about what she *typed*.
+// A few cloze prompts (the bare "Il ___" weather entries) carry a trailing
+// emoji just to keep word[0] unique across the deck — it's meant to be seen,
+// not read aloud, so strip it before handing text to the speech synthesizer.
+function stripEmoji(s){ return s.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, "").trim(); }
 function frenchAudioFor(e, field){
   if(e.kind==="verb" || e.kind==="number") return fieldAnswer(e, field);
   // Most cloze prompts are "phrase with ___" — speak it filled in. A few
   // ("de + le = ?") have no blank to fill, so just speak the answer.
-  if(e.kind==="cloze") return e.word[0].indexOf("___")!==-1 ? e.word[0].replace("___", e.word[1]) : e.word[1];
+  if(e.kind==="cloze"){
+    var prompt = stripEmoji(e.word[0]);
+    return prompt.indexOf("___")!==-1 ? prompt.replace("___", e.word[1]) : e.word[1];
+  }
   if(e.kind==="conjug") return CONJUG_PRONOUNS[field]+" "+fieldAnswer(e, field);
   return e.word[0];
 }

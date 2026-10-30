@@ -1807,12 +1807,16 @@ function renderSummary(isFinal){
     ? '<p class="summary-remaining">Осталось <b>'+remaining+'</b> '+pluralRu(remaining,["слово","слова","слов"])+
       ' ('+miniLeft+' '+pluralRu(miniLeft,["мини-тренировка","мини-тренировки","мини-тренировок"])+')</p>'
     : '';
-  var emptyText = !batchSeen ? '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>' : '';
   // Once the due queue is actually empty (not just a mini-batch boundary),
   // today's unfixed mistakes get first refusal over free practice — see
   // errorKeysInScope. Finishing that pass clears them (reviewedErrorKeys),
   // so this naturally falls through to the regular practice-more button.
   var pendingErrors = (isFinal && remaining===0) ? errorKeysInScope() : [];
+  var emptyText = !batchSeen
+    ? (pendingErrors.length
+      ? '<p class="hint">Сегодняшние слова изучены. Можешь повторить '+pendingErrors.length+' '+pluralRu(pendingErrors.length,["ошибку","ошибки","ошибок"])+'.</p>'
+      : '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>')
+    : '';
 
   var html = '<div class="empty">'+
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>'+
@@ -1824,7 +1828,7 @@ function renderSummary(isFinal){
     (!isFinal && remaining>0
       ? '<button class="btn primary" id="continueBtn">Продолжить</button>'
       : (pendingErrors.length
-        ? '<button class="btn primary" id="reviewErrorsBtn">Повторить ошибки ('+pendingErrors.length+')</button>'
+        ? '<button class="btn primary" id="reviewErrorsBtn">Повторить ошибки</button>'
         : '<button class="btn primary" id="practiceMoreBtn">Тренироваться ещё (вне графика)</button>'))+
   '</div>';
   cardArea.innerHTML = html;

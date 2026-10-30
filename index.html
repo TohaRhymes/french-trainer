@@ -85,7 +85,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
    row silently wrapped onto its own orphaned line anyway. Two fixed rows
    never wrap unpredictably, so the header reads the same at every width. */
 .toprow{display:flex;flex-direction:column;gap:12px;}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px;}
 .topbar .title{font-size:1.3rem;font-weight:600;letter-spacing:-0.01em;}
 .topbar .title em{font-style:normal;color:var(--accent);}
 .filterbar{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;}
@@ -122,6 +122,10 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   .mobile-toggle{display:flex;}
   .toprow:not(.expanded) .icon-group{display:none;}
   .toprow:not(.expanded) .filterbar{display:none;}
+  /* The full title plus the icon-group buttons don't fit one row on a
+     phone — the subtitle wrapping is what made the title bounce up and
+     down when the panel opened/closed. */
+  .title-sub{display:none;}
 }
 
 .deck-select{
@@ -360,7 +364,7 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 <div class="wrap">
   <div class="toprow">
     <div class="topbar">
-      <div class="title">Eml<em>ék</em> | запоминание слов</div>
+      <div class="title">Eml<em>ék</em><span class="title-sub"> | запоминание слов</span></div>
       <div class="topbar-actions">
       <div class="icon-group">
         <button class="iconbtn" id="editBtn" title="Наборы слов" aria-label="Наборы слов">

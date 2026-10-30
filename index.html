@@ -294,13 +294,9 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .progressbar > div{height:100%;background:var(--accent);transition:width .25s ease;}
 
 .empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding-block:28px;}
-/* .btn's flex:1 only fills width inside a row flex container (.row,
-   .advance-row) — .empty is a column flex container, where flex:1 controls
-   height, not width, so a short label like "Продолжить" shrank to its own
-   content width instead of matching the card. Stretch it explicitly here. */
-.empty .btn{align-self:stretch;}
 .empty svg{width:46px;height:46px;color:var(--accent);}
 .empty p{color:var(--ink-muted);font-size:.92rem;max-width:34ch;}
+.empty p.hint-wide{max-width:40ch;}
 
 .summary-stats{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;}
 .summary-stat{display:flex;flex-direction:column;align-items:center;gap:2px;}
@@ -1819,7 +1815,7 @@ function renderSummary(isFinal){
   var pendingErrors = (isFinal && remaining===0) ? errorKeysInScope() : [];
   var emptyText = !batchSeen
     ? (pendingErrors.length
-      ? '<p class="hint">Сегодняшние слова изучены. Можешь повторить '+pendingErrors.length+' '+pluralRu(pendingErrors.length,["ошибку","ошибки","ошибок"])+'.</p>'
+      ? '<p class="hint hint-wide">Сегодняшние слова изучены.<br>Можешь повторить '+pendingErrors.length+' '+pluralRu(pendingErrors.length,["ошибку","ошибки","ошибок"])+'.</p>'
       : '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>')
     : '';
 

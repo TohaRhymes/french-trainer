@@ -1160,6 +1160,24 @@ function dailyCleanInScope(){
     return ids.some(function(id){ return k.indexOf(id+"::")===0; });
   }).length;
 }
+// Today's mistakes still owed a review: seen today, not answered cleanly,
+// and not already cleared in this page load's error-review pass (see
+// reviewedErrorKeys — that tracking is deliberately in-memory only, same as
+// dailyTarget, since the review pass itself never touches state.daily).
+function errorKeysInScope(){
+  var ids = activeDeckIds();
+  return Object.keys(state.daily.words).filter(function(k){
+    return ids.some(function(id){ return k.indexOf(id+"::")===0; })
+      && !state.daily.cleanWords[k] && !reviewedErrorKeys[k];
+  });
+}
+function errorEntries(){
+  var want = {};
+  errorKeysInScope().forEach(function(k){ want[k] = true; });
+  var out = poolEntries().filter(function(e){ return want[entryProgKey(e)]; });
+  out.forEach(assignDirection);
+  return shuffle(out);
+}
 
 var queue = [];
 // "Сегодня X/Y" target per scope (__all__ or a single deck id), kept only
@@ -1173,6 +1191,8 @@ var queue = [];
 // leftover state to desync.
 var dailyTarget = {};
 var freePractice = false;
+var reviewingErrors = false; // off-schedule pass over today's mistakes, repeated until correct
+var reviewedErrorKeys = {};  // keys cleared in this pass — in-memory only, see errorKeysInScope
 var current = null;          // one entry, see poolEntries()
 var resolved = {};
 var correctFlags = {};
@@ -1675,6 +1695,18 @@ function finishWordRound(){
   applyProgress(clean);
   roundFinished = true;
 
+  // Error-review pass: a correct answer clears the word for this page load;
+  // a mistake goes back into the queue at a random later spot, never as the
+  // very next card, so it isn't just rote-repeated back-to-back.
+  if(reviewingErrors){
+    if(clean){
+      reviewedErrorKeys[entryProgKey(current)] = true;
+    } else {
+      var pos = queue.length ? 1 + Math.floor(Math.random()*queue.length) : 0;
+      queue.splice(pos, 0, current);
+    }
+  }
+
   batchSeen++;
   if(clean) batchCorrect++;
   if(!freePractice){
@@ -1776,6 +1808,11 @@ function renderSummary(isFinal){
       ' ('+miniLeft+' '+pluralRu(miniLeft,["мини-тренировка","мини-тренировки","мини-тренировок"])+')</p>'
     : '';
   var emptyText = !batchSeen ? '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>' : '';
+  // Once the due queue is actually empty (not just a mini-batch boundary),
+  // today's unfixed mistakes get first refusal over free practice — see
+  // errorKeysInScope. Finishing that pass clears them (reviewedErrorKeys),
+  // so this naturally falls through to the regular practice-more button.
+  var pendingErrors = (isFinal && remaining===0) ? errorKeysInScope() : [];
 
   var html = '<div class="empty">'+
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>'+
@@ -1786,14 +1823,25 @@ function renderSummary(isFinal){
     remainingLine+
     (!isFinal && remaining>0
       ? '<button class="btn primary" id="continueBtn">Продолжить</button>'
-      : '<button class="btn primary" id="practiceMoreBtn">Тренироваться ещё (вне графика)</button>')+
+      : (pendingErrors.length
+        ? '<button class="btn primary" id="reviewErrorsBtn">Повторить ошибки ('+pendingErrors.length+')</button>'
+        : '<button class="btn primary" id="practiceMoreBtn">Тренироваться ещё (вне графика)</button>'))+
   '</div>';
   cardArea.innerHTML = html;
   var continueBtn = document.getElementById("continueBtn");
   if(continueBtn) continueBtn.onclick = function(){ startBatch(); nextWord(); };
+  var errorsBtn = document.getElementById("reviewErrorsBtn");
+  if(errorsBtn) errorsBtn.onclick = function(){
+    freePractice = true;
+    reviewingErrors = true;
+    queue = errorEntries();
+    startBatch();
+    nextWord();
+  };
   var practiceBtn = document.getElementById("practiceMoreBtn");
   if(practiceBtn) practiceBtn.onclick = function(){
     freePractice = true;
+    reviewingErrors = false;
     queue = poolEntries();
     queue.forEach(assignDirection);
     shuffle(queue);
@@ -1808,6 +1856,7 @@ function updateFooterNote(){
 
 function startSession(){
   freePractice = false;
+  reviewingErrors = false;
   if(!state.daily || state.daily.date !== todayStr() || !state.daily.words){
     // "Сегодня" tracks the calendar day, not the browser tab: a reload or a
     // different device must see the same set, so it lives in state.daily.

@@ -158,6 +158,8 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .box-dots{display:flex;gap:4px;}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--border);}
 .dot.on{background:var(--accent);}
+@keyframes dotPop{0%{transform:scale(.3);opacity:.4;}60%{transform:scale(1.4);}100%{transform:scale(1);opacity:1;}}
+.dot.pop{animation:dotPop .35s ease;}
 
 .ruword{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:2.35rem;text-align:center;padding-block:6px;letter-spacing:-0.015em;}
 .deck-tag{font-size:.7rem;color:var(--ink-muted);text-align:right;}
@@ -1697,8 +1699,27 @@ document.addEventListener("keydown", function(e){
 function finishWordRound(){
   var fields = requiredFields(current);
   var clean = !fields.some(function(f){ return mistaken[f] || hinted[f]; });
+  var oldBox = freePractice ? null : currentBox();
   applyProgress(clean);
   roundFinished = true;
+
+  // Show the level-up immediately on the dots that are already on screen,
+  // instead of only the next time this word happens to come up — that could
+  // be days later via spaced repetition, so without this she'd never
+  // actually see the box she just moved into.
+  if(clean && !freePractice){
+    var newBox = currentBox();
+    if(newBox > oldBox){
+      var dotsEl = cardArea.querySelector(".box-dots");
+      if(dotsEl){
+        var dotsHtml = "";
+        for(var di=1; di<=5; di++){
+          dotsHtml += '<span class="dot'+(di<=newBox?' on':'')+(di===newBox?' pop':'')+'"></span>';
+        }
+        dotsEl.innerHTML = dotsHtml;
+      }
+    }
+  }
 
   // Error-review pass: a correct answer clears the word for this page load;
   // a mistake goes back into the queue at a random later spot, never as the

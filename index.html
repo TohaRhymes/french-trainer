@@ -739,8 +739,9 @@ function normalizeState(raw){
   var s = raw || {};
   if(s.decks){
     if(!s.progress) s.progress = {};
-    if(!s.daily || !s.daily.words) s.daily = {date: todayStr(), words:{}, cleanWords:{}};
+    if(!s.daily || !s.daily.words) s.daily = {date: todayStr(), words:{}, cleanWords:{}, reviewedErrors:{}};
     if(!s.daily.cleanWords) s.daily.cleanWords = {};
+    if(!s.daily.reviewedErrors) s.daily.reviewedErrors = {};
     s.activeDeck = "__all__";
     // Backfill any autoAdd default deck this saved state doesn't have yet
     // (e.g. one of the original decks added to DEFAULT_DECKS after this
@@ -1168,14 +1169,16 @@ function dailyCleanInScope(){
   }).length;
 }
 // Today's mistakes still owed a review: seen today, not answered cleanly,
-// and not already cleared in this page load's error-review pass (see
-// reviewedErrorKeys — that tracking is deliberately in-memory only, same as
-// dailyTarget, since the review pass itself never touches state.daily).
+// and not already cleared in this page load's error-review pass.
+// state.daily.reviewedErrors is persisted (unlike the rest of the pass,
+// which deliberately never touches box/due progress) specifically so that
+// closing and reopening the trainer mid-review doesn't un-clear words she
+// already got right — see the write site in finishWordRound.
 function errorKeysInScope(){
   var ids = activeDeckIds();
   return Object.keys(state.daily.words).filter(function(k){
     return ids.some(function(id){ return k.indexOf(id+"::")===0; })
-      && !state.daily.cleanWords[k] && !reviewedErrorKeys[k];
+      && !state.daily.cleanWords[k] && !state.daily.reviewedErrors[k];
   });
 }
 function errorEntries(){
@@ -1199,7 +1202,6 @@ var queue = [];
 var dailyTarget = {};
 var freePractice = false;
 var reviewingErrors = false; // off-schedule pass over today's mistakes, repeated until correct
-var reviewedErrorKeys = {};  // keys cleared in this pass — in-memory only, see errorKeysInScope
 var current = null;          // one entry, see poolEntries()
 var resolved = {};
 var correctFlags = {};
@@ -1721,12 +1723,17 @@ function finishWordRound(){
     }
   }
 
-  // Error-review pass: a correct answer clears the word for this page load;
-  // a mistake goes back into the queue at a random later spot, never as the
-  // very next card, so it isn't just rote-repeated back-to-back.
+  // Error-review pass: a correct answer clears the word, persisted so a
+  // reload mid-review doesn't bring already-fixed words back; a mistake
+  // goes back into the queue at a random later spot, never as the very
+  // next card, so it isn't just rote-repeated back-to-back.
   if(reviewingErrors){
     if(clean){
-      reviewedErrorKeys[entryProgKey(current)] = true;
+      var errKey = entryProgKey(current);
+      state.daily.reviewedErrors[errKey] = true;
+      var reviewPatch = {daily:{date: state.daily.date, reviewedErrors:{}}};
+      reviewPatch.daily.reviewedErrors[errKey] = true;
+      patchState(reviewPatch);
     } else {
       var pos = queue.length ? 1 + Math.floor(Math.random()*queue.length) : 0;
       queue.splice(pos, 0, current);
@@ -1839,7 +1846,7 @@ function renderSummary(isFinal){
     : '';
   // Once the due queue is actually empty (not just a mini-batch boundary),
   // today's unfixed mistakes get first refusal over free practice — see
-  // errorKeysInScope. Finishing that pass clears them (reviewedErrorKeys),
+  // errorKeysInScope. Finishing that pass clears them (state.daily.reviewedErrors),
   // so this naturally falls through to the regular practice-more button.
   var pendingErrors = (isFinal && remaining===0) ? errorKeysInScope() : [];
   var emptyText = !batchSeen
@@ -1897,11 +1904,12 @@ function startSession(){
     // This reset must run BEFORE buildDueQueue(), which checks daily.words
     // to exclude words already answered today — on yesterday's stale
     // daily.words, that check would wrongly suppress today's first pass.
-    state.daily = {date: todayStr(), words: {}, cleanWords: {}};
+    state.daily = {date: todayStr(), words: {}, cleanWords: {}, reviewedErrors: {}};
     saveState();
     dailyTarget = {}; // new calendar day — yesterday's in-memory targets no longer apply
   }
   if(!state.daily.cleanWords) state.daily.cleanWords = {};
+  if(!state.daily.reviewedErrors) state.daily.reviewedErrors = {};
   queue = buildDueQueue();
   // The "Сегодня X/Y" target only ever grows within this page load (never
   // shrinks, never lets X exceed Y) — see the dailyTarget comment above.

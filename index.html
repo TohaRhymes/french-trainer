@@ -1826,12 +1826,14 @@ function renderSummary(isFinal){
         (batchLearned ? '<div class="summary-stat"><b>+'+batchLearned+'</b><span>выучено</span></div>' : '')+
       '</div>'
     : '';
-  var dayFooter = dayWords
+  var dayFooter = (dayWords && !reviewingErrors)
     ? '<p class="summary-footer">Сегодня: '+dayWords+' '+pluralRu(dayWords,["слово","слова","слов"])+', '+dayPct+'% правильно</p>'
     : '';
   var remainingLine = (!isFinal && remaining>0)
-    ? '<p class="summary-remaining">Осталось '+remaining+' '+pluralRu(remaining,["слово","слова","слов"])+
-      ' ('+miniLeft+' '+pluralRu(miniLeft,["мини-тренировка","мини-тренировки","мини-тренировок"])+')</p>'
+    ? (reviewingErrors
+      ? '<p class="summary-remaining">Осталось повторить '+remaining+' '+pluralRu(remaining,["ошибку","ошибки","ошибок"])+'</p>'
+      : '<p class="summary-remaining">Осталось '+remaining+' '+pluralRu(remaining,["слово","слова","слов"])+
+        ' ('+miniLeft+' '+pluralRu(miniLeft,["мини-тренировка","мини-тренировки","мини-тренировок"])+')</p>')
     : '';
   // Once the due queue is actually empty (not just a mini-batch boundary),
   // today's unfixed mistakes get first refusal over free practice — see

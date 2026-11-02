@@ -1822,7 +1822,9 @@ function renderSummary(isFinal){
   var batchStats = batchSeen
     ? '<div class="summary-stats">'+
         '<div class="summary-stat"><b>'+batchSeen+'</b><span>'+pluralRu(batchSeen,["слово","слова","слов"])+'</span></div>'+
-        '<div class="summary-stat"><b>'+pct+'%</b><span>правильно</span></div>'+
+        (reviewingErrors
+          ? '<div class="summary-stat"><b>'+batchCorrect+'</b><span>правильно</span></div>'
+          : '<div class="summary-stat"><b>'+pct+'%</b><span>правильно</span></div>')+
         (batchLearned ? '<div class="summary-stat"><b>+'+batchLearned+'</b><span>выучено</span></div>' : '')+
       '</div>'
     : '';

@@ -2087,9 +2087,9 @@ mobileToggleBtn.onclick = function(){
 };
 
 var titleBtn = document.getElementById("titleBtn");
-titleBtn.onclick = function(){ if(state) openStatsOverlay("learned"); };
+titleBtn.onclick = function(){ if(state) renderSummary(queue.length===0); };
 titleBtn.addEventListener("keydown", function(e){
-  if((e.key==="Enter" || e.key===" ") && state){ e.preventDefault(); openStatsOverlay("learned"); }
+  if((e.key==="Enter" || e.key===" ") && state){ e.preventDefault(); renderSummary(queue.length===0); }
 });
 
 var statsOverlay = document.getElementById("statsOverlay");

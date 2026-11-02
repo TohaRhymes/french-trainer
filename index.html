@@ -2087,9 +2087,15 @@ mobileToggleBtn.onclick = function(){
 };
 
 var titleBtn = document.getElementById("titleBtn");
-titleBtn.onclick = function(){ if(state) renderSummary(queue.length===0); };
+// Entering free practice or error-review is itself only possible once the
+// real due queue is already empty, so while either is active that's
+// already settled — `queue` at that point holds the temporary practice
+// pool, not today's schedule, and treating its length as "осталось" would
+// wrongly show "Продолжить" instead of the actual final screen.
+function titleSummaryIsFinal(){ return freePractice || reviewingErrors || queue.length===0; }
+titleBtn.onclick = function(){ if(state) renderSummary(titleSummaryIsFinal()); };
 titleBtn.addEventListener("keydown", function(e){
-  if((e.key==="Enter" || e.key===" ") && state){ e.preventDefault(); renderSummary(queue.length===0); }
+  if((e.key==="Enter" || e.key===" ") && state){ e.preventDefault(); renderSummary(titleSummaryIsFinal()); }
 });
 
 var statsOverlay = document.getElementById("statsOverlay");

@@ -158,8 +158,8 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .box-dots{display:flex;gap:4px;}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--border);}
 .dot.on{background:var(--accent);}
-@keyframes dotPop{0%{transform:scale(.3);opacity:.4;}60%{transform:scale(1.4);}100%{transform:scale(1);opacity:1;}}
-.dot.pop{animation:dotPop .35s ease;}
+@keyframes dotPop{0%{transform:scale(.3);opacity:.4;}55%{transform:scale(2);opacity:1;}100%{transform:scale(1);opacity:1;}}
+.dot.pop{animation:dotPop .45s ease-out;}
 
 .ruword{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:2.35rem;text-align:center;padding-block:6px;letter-spacing:-0.015em;}
 .deck-tag{font-size:.7rem;color:var(--ink-muted);text-align:right;}
@@ -1474,7 +1474,9 @@ function renderCard(){
     typoBtn.textContent = "Учтено";
     if(roundFinished && !cleanApplied){
       cleanApplied = true;
+      var oldBox = freePractice ? null : currentBox();
       applyProgress(true);
+      var leveledUp = animateBoxLevelUp(oldBox);
       batchCorrect++;
       if(!freePractice){
         var key = entryProgKey(current);
@@ -1485,9 +1487,20 @@ function renderCard(){
       }
       renderStats();
       // one click should be enough: score it as clean and move straight on,
-      // instead of making her also hit "Дальше"/"Итог" separately.
+      // instead of making her also hit "Дальше"/"Итог" separately — but
+      // give the level-up animation time to actually be seen first.
       var advanceBtn = document.getElementById("advanceBtn");
-      if(advanceBtn) advanceBtn.click();
+      if(advanceBtn){
+        if(leveledUp){
+          // Disabled so the global Enter-to-advance listener (bound to
+          // whatever's in the DOM right now) can't also fire a click during
+          // the wait and advance twice.
+          advanceBtn.disabled = true;
+          setTimeout(function(){ advanceBtn.disabled = false; advanceBtn.click(); }, 450);
+        } else {
+          advanceBtn.click();
+        }
+      }
     }
   };
 
@@ -1698,6 +1711,30 @@ document.addEventListener("keydown", function(e){
   if(advanceBtn){ e.preventDefault(); advanceBtn.click(); }
 });
 
+// Show the level-up immediately on the dots that are already on screen,
+// instead of only the next time this word happens to come up — that could
+// be days later via spaced repetition, so without this she'd never
+// actually see the box she just moved into.
+// Returns true if it actually animated, so callers that would otherwise
+// instantly navigate away (e.g. the typo button auto-advancing) can hold
+// off just long enough for the animation to be visible.
+function animateBoxLevelUp(oldBox){
+  if(freePractice || oldBox===null) return false;
+  var newBox = currentBox();
+  if(newBox > oldBox){
+    var dotsEl = cardArea.querySelector(".box-dots");
+    if(dotsEl){
+      var dotsHtml = "";
+      for(var di=1; di<=5; di++){
+        dotsHtml += '<span class="dot'+(di<=newBox?' on':'')+(di===newBox?' pop':'')+'"></span>';
+      }
+      dotsEl.innerHTML = dotsHtml;
+      return true;
+    }
+  }
+  return false;
+}
+
 function finishWordRound(){
   var fields = requiredFields(current);
   var clean = !fields.some(function(f){ return mistaken[f] || hinted[f]; });
@@ -1705,23 +1742,7 @@ function finishWordRound(){
   applyProgress(clean);
   roundFinished = true;
 
-  // Show the level-up immediately on the dots that are already on screen,
-  // instead of only the next time this word happens to come up — that could
-  // be days later via spaced repetition, so without this she'd never
-  // actually see the box she just moved into.
-  if(clean && !freePractice){
-    var newBox = currentBox();
-    if(newBox > oldBox){
-      var dotsEl = cardArea.querySelector(".box-dots");
-      if(dotsEl){
-        var dotsHtml = "";
-        for(var di=1; di<=5; di++){
-          dotsHtml += '<span class="dot'+(di<=newBox?' on':'')+(di===newBox?' pop':'')+'"></span>';
-        }
-        dotsEl.innerHTML = dotsHtml;
-      }
-    }
-  }
+  if(clean) animateBoxLevelUp(oldBox);
 
   // Error-review pass: a correct answer clears the word, persisted so a
   // reload mid-review doesn't bring already-fixed words back; a mistake

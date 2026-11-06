@@ -461,13 +461,13 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 "use strict";
 
 // ---- default decks ----
-// autoAdd:true decks land in every user's own `decks` automatically
-// (first load or backfill on an existing user) — this is the original
-// fixed set everyone always had. Anything added later should default to
-// opt-in instead (no autoAdd, or autoAdd:false): it only shows up in the
-// "Доступные наборы" catalog until the user explicitly adopts it, so a
-// new deck can be shipped without silently appearing in decks a user
-// (or a friend's independent copy) never asked for.
+// Every deck here is opt-in: a brand-new user starts with an empty
+// `decks` and only gets one once it's explicitly ticked on in "Доступные
+// наборы" (see availableDeckIds()/adoptDeck()) — nothing is ever added
+// silently, to a new user or a friend's independent copy. Once a deck has
+// been adopted, its word list stays in sync with this catalog (new words
+// added here get backfilled in, edited word content gets refreshed) — see
+// the two sync loops in normalizeState().
 var DEFAULT_DECKS = {
   "passe-compose": {
     name: "Passé Composé",
@@ -493,7 +493,6 @@ var DEFAULT_DECKS = {
   "transport-ch": {
     name: "Транспорт",
     kind: "word",
-    autoAdd: true,
     words: [
       ["l'heure de pointe","час пик"],
       ["le trottoir","тротуар"],
@@ -616,7 +615,6 @@ var DEFAULT_DECKS = {
   "nombres-ch": {
     name: "Числа",
     kind: "number",
-    autoAdd: true,
     // word shape: [variante CH (suisse), standart FR, chiffre]. Pour la
     // plupart des nombres les deux colonnes sont identiques — seuls 70/80/90
     // diffèrent entre le français de Suisse et le français standard.
@@ -636,7 +634,6 @@ var DEFAULT_DECKS = {
   "jours-semaine": {
     name: "Дни недели",
     kind: "word",
-    autoAdd: true,
     words: [
       ["lundi","понедельник"],["mardi","вторник"],["mercredi","среда"],
       ["jeudi","четверг"],["vendredi","пятница"],["samedi","суббота"],
@@ -743,25 +740,18 @@ function normalizeState(raw){
     if(!s.daily.cleanWords) s.daily.cleanWords = {};
     if(!s.daily.reviewedErrors) s.daily.reviewedErrors = {};
     s.activeDeck = "__all__";
-    // Backfill any autoAdd default deck this saved state doesn't have yet
-    // (e.g. one of the original decks added to DEFAULT_DECKS after this
-    // user's first load) — without this, a brand-new autoAdd deck only
-    // ever shows up for users whose state hasn't been created yet, never
-    // for an already-migrated one. Non-autoAdd (opt-in/catalog) decks are
-    // deliberately NOT backfilled here — they only appear via the
-    // "Доступные наборы" picker (see availableDeckIds()/adoptDeck()).
-    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
-      if(DEFAULT_DECKS[deckId].autoAdd && !s.decks[deckId]) s.decks[deckId] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
-    });
-    // Backfill new words added to an autoAdd deck's catalog entry AFTER this
-    // user already had that deck (e.g. two more Passé Composé verbs added
-    // later) — the block above only handles a deck missing entirely, so a
-    // deck the user already has would otherwise never pick up new words
-    // added to it. Matched by French term so it never touches/duplicates a
+    // Decks are never added here — a deck this saved state doesn't have
+    // yet stays absent until the user explicitly ticks it on in "Доступные
+    // наборы" (see availableDeckIds()/adoptDeck()). Only a deck the user
+    // already has gets kept in sync with the catalog below.
+    //
+    // Backfill new words added to a catalog deck's entry AFTER this user
+    // already had that deck (e.g. two more Passé Composé verbs added
+    // later) — matched by French term so it never touches/duplicates a
     // word already there, and never touches a deck the user edited/renamed
     // away from the catalog version.
     Object.keys(DEFAULT_DECKS).forEach(function(deckId){
-      if(!DEFAULT_DECKS[deckId].autoAdd || !s.decks[deckId]) return;
+      if(!s.decks[deckId]) return;
       var existingKeys = {};
       s.decks[deckId].words.forEach(function(w){ existingKeys[wordKey(w[0])] = true; });
       DEFAULT_DECKS[deckId].words.forEach(function(w){
@@ -777,7 +767,7 @@ function normalizeState(raw){
     // came from (shared db or the localStorage fallback), so it self-heals
     // either way.
     Object.keys(DEFAULT_DECKS).forEach(function(deckId){
-      if(!DEFAULT_DECKS[deckId].autoAdd || !s.decks[deckId]) return;
+      if(!s.decks[deckId]) return;
       var catalogByKey = {};
       DEFAULT_DECKS[deckId].words.forEach(function(w){ catalogByKey[wordKey(w[0])] = w; });
       s.decks[deckId].words.forEach(function(w, i){
@@ -793,47 +783,40 @@ function normalizeState(raw){
     });
     return s;
   }
-  // old shape (or nothing at all): migrate into "passe-compose" + seed the
-  // transport deck fresh, without touching any real progress she already has.
-  var oldWords = s.words || DEFAULT_DECKS["passe-compose"].words;
+  // Nothing saved at all: a genuinely brand-new user, so every deck —
+  // including the ones a brand-new user used to get automatically — starts
+  // absent, same as an already-migrated state with an empty `decks` would.
+  // They land on an empty training screen and pick decks themselves via
+  // "Доступные наборы".
+  if(!s.words){
+    return {
+      decks: {},
+      progress: {},
+      daily: {date: todayStr(), words:{}, cleanWords:{}, reviewedErrors:{}},
+      activeDeck: "__all__"
+    };
+  }
+  // Old pre-multi-deck shape (a real save from before "decks" existed):
+  // migrate those actual words/progress into "passe-compose" — nothing else
+  // gets seeded alongside it; any other deck is opt-in via the catalog like
+  // for every other user.
+  var oldWords = s.words;
   var oldProgress = s.progress || {};
   var newProgress = {};
   oldWords.forEach(function(w){
     newProgress[deckProgKey("passe-compose", wordKey(w[0]))] = oldProgress[wordKey(w[0])] || freshProgressEntry();
   });
-  var transport = JSON.parse(JSON.stringify(DEFAULT_DECKS["transport-ch"]));
-  transport.words.forEach(function(w){
-    newProgress[deckProgKey("transport-ch", wordKey(w[0]))] = freshProgressEntry();
-  });
-  // Any other autoAdd default deck beyond passe-compose/transport-ch (added
-  // after this legacy migration path was written) gets seeded fresh too, the
-  // same way transport-ch does — otherwise a brand-new user (nothing in db/
-  // localStorage yet) only ever sees the two oldest decks. Non-autoAdd decks
-  // are skipped here too — they're opt-in via the catalog picker, same rule
-  // as the already-migrated branch above.
-  var extraDecks = {};
-  Object.keys(DEFAULT_DECKS).forEach(function(deckId){
-    if(deckId==="passe-compose" || deckId==="transport-ch") return;
-    if(!DEFAULT_DECKS[deckId].autoAdd) return;
-    var deck = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId]));
-    deck.words.forEach(function(w){
-      newProgress[deckProgKey(deckId, wordKey(w[0]))] = freshProgressEntry(deckId);
-    });
-    extraDecks[deckId] = deck;
-  });
   // the old daily tracker (if today's) used bare word keys — re-key them
   // under "passe-compose::" so today's "Сегодня" count survives the move.
   var oldDaily = (s.daily && s.daily.date===todayStr() && s.daily.words) ? s.daily : null;
-  var newDaily = {date: todayStr(), words:{}, cleanWords:{}};
+  var newDaily = {date: todayStr(), words:{}, cleanWords:{}, reviewedErrors:{}};
   if(oldDaily){
     Object.keys(oldDaily.words).forEach(function(k){
       newDaily.words[deckProgKey("passe-compose", k)] = true;
     });
   }
-  var decks = { "passe-compose": {name:"Passé Composé", kind:"verb", words: oldWords}, "transport-ch": transport };
-  Object.keys(extraDecks).forEach(function(deckId){ decks[deckId] = extraDecks[deckId]; });
   return {
-    decks: decks,
+    decks: { "passe-compose": {name:"Passé Composé", kind:"verb", words: oldWords} },
     progress: newProgress,
     daily: newDaily,
     activeDeck: "__all__"

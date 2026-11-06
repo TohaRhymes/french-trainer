@@ -162,6 +162,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .dot.pop{animation:dotPop .45s ease-out;}
 
 .ruword{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:2.35rem;text-align:center;padding-block:6px;letter-spacing:-0.015em;}
+.ruword-translation{font-family:"Public Sans",ui-sans-serif,system-ui,sans-serif;font-weight:400;font-size:1rem;color:var(--ink-muted);letter-spacing:normal;margin-top:4px;}
 .deck-tag{font-size:.7rem;color:var(--ink-muted);text-align:right;}
 
 .fields-row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
@@ -374,6 +375,9 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
         </button>
         <button class="iconbtn" id="catalogBtn" title="Доступные наборы" aria-label="Доступные наборы">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        </button>
+        <button class="iconbtn" id="errorsTopBtn" title="Повторить ошибки" aria-label="Повторить ошибки" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><circle cx="12" cy="16.3" r="0.6" fill="currentColor" stroke="none"/></svg>
         </button>
       </div>
       <button class="iconbtn mobile-toggle" id="mobileToggleBtn" title="Показать панель" aria-label="Показать панель">
@@ -982,27 +986,78 @@ function hintSeed(fullText){
   return first.slice(0, Math.min(3, first.length));
 }
 
+// ---- per-deck language config ----
+// A deck without its own `lang` behaves exactly as before (French, Swiss
+// numbers, the usual accented-letter palette) — `lang` only needs to be set
+// on a deck built for a different target language.
+var DEFAULT_LANG = {
+  code: "fr-FR",
+  name: "французский",       // used in "Переведи на ___"
+  adverb: "по-французски",   // used in "Напиши число ___"
+  accentChars: ["é","è","ê","ë","à","â","ô","û","ù","ç","î","ï","œ"]
+};
+function deckLang(e){
+  var deck = state.decks[e.deckId];
+  return (deck && deck.lang) || DEFAULT_LANG;
+}
+function capitalize(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+
+// conjug word shape: [infinitive, [form0..form5], translation, [gloss0..gloss5]?].
+// The 6 pronoun fields (id/label/spoken form) are per-deck — `pronouns` on
+// the deck — so a conjug-kind deck for another language can use its own set
+// instead of je/tu/il/nous/vous/ils. No `pronouns` on the deck = this French
+// default, so every deck built before this existed keeps working unchanged.
+var DEFAULT_CONJUG_PRONOUNS = [
+  {field:"je", label:"Je", say:"je"},
+  {field:"tu", label:"Tu", say:"tu"},
+  {field:"elle", label:"Elle", say:"elle"},
+  {field:"nous", label:"Nous", say:"nous"},
+  {field:"vous", label:"Vous", say:"vous"},
+  {field:"elles", label:"Elles", say:"elles"}
+];
+function conjugPronouns(deckId){
+  var deck = state.decks[deckId];
+  return (deck && deck.pronouns) || DEFAULT_CONJUG_PRONOUNS;
+}
+function conjugFields(deckId){ return conjugPronouns(deckId).map(function(p){ return p.field; }); }
+function conjugIdx(deckId, field){ return conjugFields(deckId).indexOf(field); }
+function conjugLabel(deckId, field){
+  var p = conjugPronouns(deckId).filter(function(x){ return x.field===field; })[0];
+  return p ? p.label : field;
+}
+function conjugSay(deckId, field){
+  var p = conjugPronouns(deckId).filter(function(x){ return x.field===field; })[0];
+  return p ? p.say : field;
+}
+
 // ---- speech ----
-var frenchVoice = null;
+var allVoices = [];
 function pickVoice(){
-  try{
-    var voices = speechSynthesis.getVoices();
-    frenchVoice = voices.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf("fr")===0; }) || null;
-  }catch(e){}
+  try{ allVoices = speechSynthesis.getVoices(); }catch(e){}
 }
 if(typeof speechSynthesis !== "undefined"){
   pickVoice();
   speechSynthesis.onvoiceschanged = pickVoice;
 }
-function makeUtterance(text){
+function voiceForLangCode(code){
+  var prefix = (code||"fr-FR").split("-")[0].toLowerCase();
+  return allVoices.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf(prefix)===0; }) || null;
+}
+function makeUtterance(text, langCode){
+  var code = langCode || "fr-FR";
   var u = new SpeechSynthesisUtterance(text);
-  u.lang = "fr-FR";
-  if(frenchVoice) u.voice = frenchVoice;
+  u.lang = code;
+  var v = voiceForLangCode(code);
+  if(v) u.voice = v;
   u.rate = 0.92;
   return u;
 }
-function speakFR(text){
-  try{ speechSynthesis.cancel(); speechSynthesis.speak(makeUtterance(text)); }catch(e){}
+// deckId is optional (falls back to French) so call sites that only have a
+// bare string in hand, like the delegated .speakmini replay handler, still work.
+function speakFR(text, deckId){
+  var deck = deckId && state.decks[deckId];
+  var lang = (deck && deck.lang) || DEFAULT_LANG;
+  try{ speechSynthesis.cancel(); speechSynthesis.speak(makeUtterance(text, lang.code)); }catch(e){}
 }
 
 // ---- decks / entries / queue ----
@@ -1033,14 +1088,6 @@ function assignDirection(e){
   if(e.kind==="word") e.direction = "ru2fr";
 }
 
-// conjug word shape: [infinitive, [je,tu,elle,nous,vous,elles], translation].
-// "elle" stands in for il/elle/on and "elles" for ils/elles — French gives
-// them one shared form, so there's no separate il/ils slot to fill.
-var CONJUG_FIELDS = ["je","tu","elle","nous","vous","elles"];
-var CONJUG_IDX = {je:0, tu:1, elle:2, nous:3, vous:4, elles:5};
-var CONJUG_LABELS = {je:"Je", tu:"Tu", elle:"Elle", nous:"Nous", vous:"Vous", elles:"Elles"};
-var CONJUG_PRONOUNS = {je:"je", tu:"tu", elle:"elle", nous:"nous", vous:"vous", elles:"elles"};
-
 function requiredFields(e){
   if(e.kind==="verb") return ["a","b"];
   // Most numbers spell the same way in standard and Swiss French — only
@@ -1048,7 +1095,7 @@ function requiredFields(e){
   // (word[0]!==word[1]) get a second field; the rest behave like a single
   // plain word.
   if(e.kind==="number") return e.word[0]===e.word[1] ? ["a"] : ["a","b"];
-  if(e.kind==="conjug") return CONJUG_FIELDS;
+  if(e.kind==="conjug") return conjugFields(e.deckId);
   return ["a"];
 }
 
@@ -1059,15 +1106,23 @@ function requiredFields(e){
 function fieldAnswer(e, field){
   if(e.kind==="verb" || e.kind==="number") return field==="a" ? e.word[0] : e.word[1];
   if(e.kind==="cloze") return e.word[1];
-  if(e.kind==="conjug") return e.word[1][CONJUG_IDX[field]];
+  if(e.kind==="conjug") return e.word[1][conjugIdx(e.deckId, field)];
   return e.direction==="ru2fr" ? e.word[0] : e.word[1];
 }
 function fieldLabel(e, field){
-  if(e.kind==="verb") return field==="a" ? "Инфинитив" : "Причастие";
-  if(e.kind==="number") return e.word[0]===e.word[1] ? "Французский" : (field==="a" ? "Швейцарский" : "Французский");
+  var deck = state.decks[e.deckId];
+  if(e.kind==="verb"){
+    var labels = (deck && deck.fieldLabels) || {a:"Инфинитив", b:"Причастие"};
+    return labels[field] || field;
+  }
+  if(e.kind==="number"){
+    var mainLabel = capitalize(deckLang(e).name);
+    var variantLabel = (deck && deck.variantLabel) || "Швейцарский";
+    return e.word[0]===e.word[1] ? mainLabel : (field==="a" ? variantLabel : mainLabel);
+  }
   if(e.kind==="cloze") return "Пропуск";
-  if(e.kind==="conjug") return CONJUG_LABELS[field];
-  return e.direction==="ru2fr" ? "Французский" : "Русский";
+  if(e.kind==="conjug") return conjugLabel(e.deckId, field);
+  return e.direction==="ru2fr" ? capitalize(deckLang(e).name) : "Русский";
 }
 // Desktop-only: the per-person Russian gloss shown next to the pronoun on a
 // conjugation card ("Je" → "я делаю"), so she doesn't have to hold the whole
@@ -1080,7 +1135,7 @@ function conjugTranslation(e, field){
   // showing each form's Russian gloss here would hand back exactly what
   // she's supposed to be retrieving from memory.
   if(conjugShowsRussian(e)) return "";
-  return e.word[3][CONJUG_IDX[field]] || "";
+  return e.word[3][conjugIdx(e.deckId, field)] || "";
 }
 function answerIsFrench(e, field){
   if(e.kind==="verb") return true;
@@ -1099,33 +1154,58 @@ function stripEmoji(s){ return s.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\
 function frenchAudioFor(e, field){
   if(e.kind==="verb" || e.kind==="number") return fieldAnswer(e, field);
   // Most cloze prompts are "phrase with ___" — speak it filled in. A few
-  // ("de + le = ?") have no blank to fill, so just speak the answer.
+  // ("de + le = ?") have no blank to fill, so just speak the answer. A deck
+  // can opt out of the full-sentence reading (e.g. comparatifs-ch, where the
+  // whole point is the one changed word, not the surrounding "que ..." clause)
+  // via its own speakAnswerOnly flag.
   if(e.kind==="cloze"){
+    if(state.decks[e.deckId].speakAnswerOnly) return e.word[1];
     var prompt = stripEmoji(e.word[0]);
     return prompt.indexOf("___")!==-1 ? prompt.replace("___", e.word[1]) : e.word[1];
   }
-  if(e.kind==="conjug") return CONJUG_PRONOUNS[field]+" "+fieldAnswer(e, field);
+  if(e.kind==="conjug") return conjugSay(e.deckId, field)+" "+fieldAnswer(e, field);
   return e.word[0];
 }
 // At box 5 (the last, most-practiced level) a conjug card shows the Russian
 // translation instead of the French infinitive — she has to recall the verb
 // herself before conjugating it, instead of having it handed to her.
 function conjugShowsRussian(e){ return e.kind==="conjug" && currentBox()>=5; }
+// Splits a cloze translation like "он хороший (прил., м.р.)" into the
+// Russian sentence and its trailing grammar note, so a deck can show the
+// sentence up in the main prompt and keep only the note as the small hint
+// below (deck flag translationInPrompt).
+function splitClozeNote(s){
+  var m = s.match(/^(.*?)\s*(\([^)]*\))\s*$/);
+  return m ? {main: m[1], note: m[2]} : {main: s, note: null};
+}
 function promptText(e){
   if(e.kind==="verb") return e.word[2];
   if(e.kind==="number") return e.word[2];
-  if(e.kind==="cloze") return e.word[0];
+  if(e.kind==="cloze"){
+    if(state.decks[e.deckId].translationInPrompt){
+      return e.word[0]+'<div class="ruword-translation">'+splitClozeNote(e.word[3]).main+'</div>';
+    }
+    return e.word[0];
+  }
   if(e.kind==="conjug") return conjugShowsRussian(e) ? e.word[2] : e.word[0];
   return e.direction==="ru2fr" ? e.word[1] : e.word[0];
 }
 function promptEyebrow(e){
-  if(e.kind==="verb") return "Переведи на французский";
-  if(e.kind==="number") return "Напиши число по-французски (FR и CH)";
+  var deck = state.decks[e.deckId];
+  var lang = deckLang(e);
+  if(e.kind==="verb") return "Переведи на "+lang.name;
+  if(e.kind==="number"){
+    var variantNote = (deck && deck.variantNote) || "FR и CH";
+    return "Напиши число "+lang.adverb+" ("+variantNote+")";
+  }
   if(e.kind==="cloze") return "Вставь пропущенное слово";
-  if(e.kind==="conjug") return conjugShowsRussian(e)
-    ? "Переведи на французский и проспрягай в настоящем времени (présent)"
-    : "Проспрягай в настоящем времени (présent)";
-  return e.direction==="ru2fr" ? "Переведи на французский" : "Переведи на русский";
+  if(e.kind==="conjug"){
+    var tenseText = (deck && deck.conjugTenseText) || "в настоящем времени (présent)";
+    return conjugShowsRussian(e)
+      ? "Переведи на "+lang.name+" и проспрягай "+tenseText
+      : "Проспрягай "+tenseText;
+  }
+  return e.direction==="ru2fr" ? "Переведи на "+lang.name : "Переведи на русский";
 }
 
 function shuffle(arr){
@@ -1243,10 +1323,29 @@ function startSimilarity(a, b){
   return score;
 }
 
-function distractorScore(correct, candidate){
+// Drops a leading article (un/une/le/la/l'/les/du/des/de la/de l') so
+// "une raison" vs "une fois" is scored on raison/fois, not on the shared
+// "une " every feminine noun starts with. French-specific, so it only
+// applies by default to decks with no `lang` (i.e. still French) or an
+// explicit fr* lang code; a deck for another language can set its own
+// lang.articlePattern (a RegExp source string), or leave it unset to skip
+// article-stripping entirely rather than wrongly apply the French one.
+var FRENCH_ARTICLE_RE = /^(une?|les?|des|du|de\s+la|de\s+l['’]|l['’])\s+/i;
+function articleRegexFor(deck){
+  var lang = (deck && deck.lang) || null;
+  if(lang && lang.articlePattern) return new RegExp(lang.articlePattern, "i");
+  if(!lang || /^fr/i.test(lang.code||"")) return FRENCH_ARTICLE_RE;
+  return null;
+}
+function stripLeadingArticle(s, re){
+  return re ? s.replace(re, "") : s;
+}
+
+function distractorScore(correct, candidate, re){
+  var c = stripLeadingArticle(correct, re), d = stripLeadingArticle(candidate, re);
   // same starting letter(s) is the strongest "could be this one" signal —
   // outranks ending similarity, which only breaks ties within that group.
-  return startSimilarity(correct, candidate)*100 + endingSimilarity(correct, candidate);
+  return startSimilarity(c, d)*100 + endingSimilarity(c, d);
 }
 
 function distractorsFor(entry, field, correctAnswer){
@@ -1256,7 +1355,9 @@ function distractorsFor(entry, field, correctAnswer){
     return picked;
   }
   var correctNorm = normalize(correctAnswer);
-  var deckWords = state.decks[entry.deckId].words;
+  var deck = state.decks[entry.deckId];
+  var deckWords = deck.words;
+  var articleRe = articleRegexFor(deck);
   var seen = {}; var candidates = [];
   deckWords.forEach(function(w){
     if(w===entry.word) return;
@@ -1269,7 +1370,7 @@ function distractorsFor(entry, field, correctAnswer){
     candidates.push(val);
   });
   candidates.sort(function(a,b){
-    return distractorScore(correctAnswer,b) - distractorScore(correctAnswer,a);
+    return distractorScore(correctAnswer,b,articleRe) - distractorScore(correctAnswer,a,articleRe);
   });
   // bias toward the most confusable options, but keep a little variety
   // instead of showing the exact same trio every time this word comes up
@@ -1283,6 +1384,7 @@ var cardArea = document.getElementById("cardArea");
 cardArea.innerHTML = '<div class="empty"><p>Загрузка прогресса…</p></div>';
 var statsRow = document.getElementById("statsRow");
 var progressFill = document.getElementById("progressFill");
+var errorsTopBtn = document.getElementById("errorsTopBtn");
 
 function renderStats(){
   var entries = poolEntries();
@@ -1295,7 +1397,23 @@ function renderStats(){
   statsRow.innerHTML =
     '<div class="chip chip-click" id="chipLearned">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
     '<div class="chip chip-click" id="chipToday">Сегодня <b>'+doneToday+'/'+dueToday+'</b></div>';
+  updateErrorsTopBtn();
 }
+
+// Lets her jump into the error-review pass mid-session, not just from the
+// end-of-day summary screen — the button simply mirrors reviewErrorsBtn's
+// own switch, so leaving the current (unanswered) card behind is safe: it
+// hasn't written any progress yet and just stays due for its normal turn.
+function updateErrorsTopBtn(){
+  errorsTopBtn.hidden = reviewingErrors || errorKeysInScope().length===0;
+}
+errorsTopBtn.onclick = function(){
+  freePractice = true;
+  reviewingErrors = true;
+  queue = errorEntries();
+  startBatch();
+  nextWord();
+};
 
 // Delegated (not rebound on every renderStats() call, which replaces these
 // chips' innerHTML constantly during a session): tapping "Выучено" opens the
@@ -1341,7 +1459,7 @@ function fieldBlock(entry, field){
   var mode = box<=2 ? "choice" : "type";
   var answer = fieldAnswer(entry, field);
   var label = fieldLabel(entry, field);
-  var needsAccent = mode==="type" && answerIsFrench(entry, field);
+  var needsAccent = mode==="type" && answerIsFrench(entry, field) && (deckLang(entry).accentChars||[]).length>0;
   var tr = conjugTranslation(entry, field);
   var html = '<div class="field" data-field="'+field+'">'+
     '<div class="field-label"><span>'+label+'</span>'+
@@ -1411,7 +1529,7 @@ function bindMatchHandlers(entry){
         var hintBtn = cardArea.querySelector('.match-row[data-field="'+field+'"] .hintbtn');
         var frenchAudio = frenchAudioFor(entry, field);
         turnIntoReplay(hintBtn, frenchAudio);
-        speakFR(frenchAudio);
+        speakFR(frenchAudio, entry.deckId);
         selectedPronounField = null;
         if(requiredFields(entry).every(function(f){ return resolved[f]; })) finishWordRound();
       } else {
@@ -1452,7 +1570,9 @@ function renderCard(){
   var deckName = state.decks[current.deckId].name;
   // At box 5 the translation IS the main prompt (see conjugShowsRussian) —
   // repeating it again here as a hint line would just show it twice.
-  var translationLine = current.kind==="cloze" ? current.word[3] : (current.kind==="conjug" && !conjugShowsRussian(current) ? current.word[2] : null);
+  var translationLine = current.kind==="cloze"
+    ? (state.decks[current.deckId].translationInPrompt ? splitClozeNote(current.word[3]).note : current.word[3])
+    : (current.kind==="conjug" && !conjugShowsRussian(current) ? current.word[2] : null);
 
   var html = ''+
     '<div class="eyebrow"><span>'+promptEyebrow(current)+(freePractice?' · свободно':'')+'</span><span class="box-dots">'+dots+'</span></div>'+
@@ -1530,8 +1650,8 @@ function renderCard(){
       };
     } else {
       var input = document.getElementById("input-"+field);
-      if(answerIsFrench(current, field)){
-        var letters = "é è ê ë à â ô û ù ç î ï œ".split(" ");
+      var letters = deckLang(current).accentChars || [];
+      if(answerIsFrench(current, field) && letters.length){
         var accentRow = cardArea.querySelector('[data-accent="'+field+'"]');
         letters.forEach(function(ch){
           var b = document.createElement("button");
@@ -1657,7 +1777,7 @@ function attemptField(field, rawValue, clickedBtn){
   if(revealBtn) revealBtn.disabled = true;
   var frenchAudio = frenchAudioFor(current, field);
   turnIntoReplay(hintBtn, frenchAudio);
-  speakFR(frenchAudio);
+  speakFR(frenchAudio, current.deckId);
 
   if(requiredFields(current).every(function(f){ return resolved[f]; })) finishWordRound();
 }
@@ -1693,7 +1813,7 @@ function turnIntoReplay(btn, answer){
 
 cardArea.addEventListener("click", function(e){
   var btn = e.target.closest && e.target.closest(".speakmini");
-  if(btn) speakFR(btn.dataset.word);
+  if(btn) speakFR(btn.dataset.word, current && current.deckId);
 });
 
 // Enter = "Дальше"/"Итог"/"Продолжить" once one of those is on
@@ -1866,10 +1986,19 @@ function renderSummary(isFinal){
   // errorKeysInScope. Finishing that pass clears them (state.daily.reviewedErrors),
   // so this naturally falls through to the regular practice-more button.
   var pendingErrors = (isFinal && remaining===0) ? errorKeysInScope() : [];
+  // This line used to live only inside emptyText, so it vanished whenever
+  // the final summary followed right after finishing a batch (batchSeen>0)
+  // — exactly the normal case of reaching "На сегодня всё" — instead of
+  // only the rarer "reopened the summary with nothing just answered" case.
+  // Surfacing the count here, independent of batchSeen, is what actually
+  // explains the "Повторить ошибки" button underneath.
   var emptyText = !batchSeen
     ? (pendingErrors.length
-      ? '<p class="hint hint-wide">Сегодняшние слова изучены.<br>Можешь повторить '+pendingErrors.length+' '+pluralRu(pendingErrors.length,["ошибку","ошибки","ошибок"])+'.</p>'
+      ? '<p class="hint hint-wide">Сегодняшние слова изучены.</p>'
       : '<p class="hint">Пока нечего повторять — всё уже отвечено сегодня.</p>')
+    : '';
+  var errorsLine = pendingErrors.length
+    ? '<p class="summary-remaining">Можно повторить '+pendingErrors.length+' '+pluralRu(pendingErrors.length,["ошибку","ошибки","ошибок"])+'</p>'
     : '';
 
   var html = '<div class="empty">'+
@@ -1879,6 +2008,7 @@ function renderSummary(isFinal){
     batchStats+
     dayFooter+
     remainingLine+
+    errorsLine+
     (!isFinal && remaining>0
       ? '<button class="btn primary" id="continueBtn">Продолжить</button>'
       : (pendingErrors.length
@@ -2214,7 +2344,7 @@ function showDeckForEdit(deckId){
     : deck.kind==="cloze"
     ? "Формат: фраза с ___;ответ;ловушка1|ловушка2|ловушка3;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : deck.kind==="conjug"
-    ? "Формат: infinitif;je|tu|il|nous|vous|ils;перевод;я…|ты…|он…|мы…|вы…|они… — по одной строке (6 форм через |, в этом порядке; последняя часть с переводом по лицам необязательна — показывается рядом с местоимением на компьютере). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
+    ? "Формат: infinitif;"+conjugFields(deckId).join("|")+";перевод;я…|ты…|он…|мы…|вы…|они… — по одной строке (6 форм через |, в порядке "+conjugFields(deckId).map(function(f){ return conjugLabel(deckId,f); }).join("/")+"; последняя часть с переводом по лицам необязательна — показывается рядом с местоимением на компьютере). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : "Формат: слово;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится.";
   editArea.value = deck.words.map(function(w){
     if(deck.kind==="cloze") return [w[0], w[1], w[2].join("|"), w[3]].join(";");

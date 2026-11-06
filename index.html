@@ -468,6 +468,9 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 // been adopted, its word list stays in sync with this catalog (new words
 // added here get backfilled in, edited word content gets refreshed) — see
 // the two sync loops in normalizeState().
+// `public: true` marks a deck as visible in someone else's catalog too —
+// without it, only the owner (me) sees it in "Доступные наборы"; anyone
+// else only ever sees the public ones (see availableDeckIds()).
 var DEFAULT_DECKS = {
   "passe-compose": {
     name: "Passé Composé",
@@ -493,6 +496,7 @@ var DEFAULT_DECKS = {
   "transport-ch": {
     name: "Транспорт",
     kind: "word",
+    public: true,
     words: [
       ["l'heure de pointe","час пик"],
       ["le trottoir","тротуар"],
@@ -615,6 +619,7 @@ var DEFAULT_DECKS = {
   "nombres-ch": {
     name: "Числа",
     kind: "number",
+    public: true,
     // word shape: [variante CH (suisse), standart FR, chiffre]. Pour la
     // plupart des nombres les deux colonnes sont identiques — seuls 70/80/90
     // diffèrent entre le français de Suisse et le français standard.
@@ -634,6 +639,7 @@ var DEFAULT_DECKS = {
   "jours-semaine": {
     name: "Дни недели",
     kind: "word",
+    public: true,
     words: [
       ["lundi","понедельник"],["mardi","вторник"],["mercredi","среда"],
       ["jeudi","четверг"],["vendredi","пятница"],["samedi","суббота"],
@@ -833,6 +839,11 @@ var dbNS = null;
 var useDb = false;
 var dbDiag = "";
 var myUserId = null;
+// Only the owner (me) sees every deck in "Доступные наборы" — anyone else
+// opening this link only sees the decks marked `public` in DEFAULT_DECKS
+// (see availableDeckIds()). Defaults to false, so an anonymous viewer or
+// one the `user` capability can't identify never sees the private decks.
+var amOwner = false;
 
 // The "me" alias in "data/users/me/..." is a convenience only the ArtifactData
 // admin tool understands (for inspecting a user's own sandbox); the page's
@@ -885,6 +896,7 @@ async function loadStateAsync(){
   try{
     var userNS = (typeof claude !== "undefined" && claude.use) ? await claude.use("user") : null;
     if(userNS && userNS.id) uid = await userNS.id();
+    amOwner = !!(userNS && userNS.isOwner && userNS.isOwner());
   }catch(e){}
   myUserId = uid || null;
   if(uid) dbDiag += (dbDiag ? ", " : "") + "id "+uid.slice(0,10);
@@ -929,8 +941,13 @@ function resetDeckProgress(deckId){
 }
 
 // ---- deck catalog (opt-in decks from DEFAULT_DECKS not yet adopted) ----
+// Anyone but the owner only ever sees the `public` decks here — the rest
+// exist in DEFAULT_DECKS but never show up in someone else's catalog.
 function availableDeckIds(){
-  return Object.keys(DEFAULT_DECKS).filter(function(id){ return !state.decks[id]; });
+  return Object.keys(DEFAULT_DECKS).filter(function(id){
+    if(state.decks[id]) return false;
+    return amOwner || DEFAULT_DECKS[id].public;
+  });
 }
 function kindLabel(kind){
   return "карточек";

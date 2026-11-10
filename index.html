@@ -137,6 +137,13 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 }
 @media (max-width:480px){ .deck-select{width:100%;} }
 
+.deckpick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.langtabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;}
+.langtab{font:inherit;font-size:.8rem;font-weight:600;padding:5px 12px;border:none;border-radius:999px;background:transparent;color:var(--ink-muted);cursor:pointer;}
+.langtab:hover{color:var(--ink);}
+.langtab.on{background:var(--accent);color:var(--accent-ink);}
+@media (max-width:480px){ .deckpick{flex-direction:column;align-items:stretch;} .langtabs{justify-content:space-between;} .langtab{flex:1;} }
+
 .stats{display:flex;gap:8px;flex-wrap:wrap;flex:none;}
 .chip{
   background:var(--surface);border:1px solid var(--border);border-radius:999px;
@@ -387,7 +394,10 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
     </div>
 
     <div class="filterbar">
-      <select id="deckModeSelect" class="deck-select"></select>
+      <div class="deckpick">
+        <div class="langtabs" id="langTabs" hidden></div>
+        <select id="deckModeSelect" class="deck-select"></select>
+      </div>
       <div class="stats" id="statsRow"></div>
     </div>
   </div>
@@ -1072,8 +1082,19 @@ function speakFR(text, deckId){
 // distractors from the same row.
 function entryProgKey(e){ return deckProgKey(e.deckId, wordKey(e.word[0])); }
 
+// Language of a deck = first part of its lang.code (no lang = French, as
+// everywhere else). state.langFilter ("__all__" or e.g. "fr"/"el") narrows
+// every deck list and "all together" pool to that language.
+function deckLangKey(id){
+  var d = state.decks[id];
+  return ((d && d.lang && d.lang.code) || "fr-FR").split("-")[0].toLowerCase();
+}
 function enabledDeckIds(){
-  return Object.keys(state.decks).filter(function(id){ return !state.decks[id].disabled; });
+  var f = state.langFilter;
+  return Object.keys(state.decks).filter(function(id){
+    if(state.decks[id].disabled) return false;
+    return !f || f==="__all__" || deckLangKey(id)===f;
+  });
 }
 
 function activeDeckIds(){
@@ -2092,7 +2113,25 @@ function startSession(){
 
 // ---- training-mode deck switcher ----
 var deckModeSelect = document.getElementById("deckModeSelect");
+var LANG_TAB_LABELS = {fr:"Français", el:"Ελληνικά"};
+function renderLangTabs(){
+  var el = document.getElementById("langTabs");
+  var langs = [];
+  Object.keys(state.decks).forEach(function(id){
+    if(state.decks[id].disabled) return;
+    var k = deckLangKey(id);
+    if(langs.indexOf(k)<0) langs.push(k);
+  });
+  if(!state.langFilter || langs.length<2 || langs.indexOf(state.langFilter)<0) state.langFilter = "__all__";
+  el.hidden = langs.length<2;
+  el.innerHTML = ["__all__"].concat(langs).map(function(k){
+    return '<button type="button" class="langtab'+(state.langFilter===k?' on':'')+'" data-lang="'+k+'">'+
+      (k==="__all__" ? "Все" : (LANG_TAB_LABELS[k] || k.toUpperCase()))+'</button>';
+  }).join("");
+  if(state.activeDeck!=="__all__" && enabledDeckIds().indexOf(state.activeDeck)<0) state.activeDeck = "__all__";
+}
 function populateDeckModeSelect(){
+  renderLangTabs();
   // A disabled deck is paused from training entirely — not mixed into
   // "Всё вместе" and not individually selectable either — so it drops out
   // of this list until re-enabled from "Доступные наборы".
@@ -2107,6 +2146,17 @@ deckModeSelect.onchange = function(){
   patchState({activeDeck: state.activeDeck});
   startSession();
 };
+
+document.getElementById("langTabs").addEventListener("click", function(e){
+  var b = e.target.closest && e.target.closest(".langtab");
+  if(!b || !state) return;
+  state.langFilter = b.dataset.lang;
+  state.activeDeck = "__all__";
+  patchState({langFilter: state.langFilter});
+  dailyTarget = {}; // the "today X/Y" total is per scope; a new language is a new scope
+  populateDeckModeSelect();
+  startSession();
+});
 
 // ---- full stats table ----
 function daysBetween(fromStr, toStr){

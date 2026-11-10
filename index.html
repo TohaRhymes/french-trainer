@@ -968,6 +968,11 @@ var state = null;
 
 // ---- answer matching ----
 function normalize(s){ return s.trim().toLowerCase().replace(/\s+/g," "); }
+// Greek stress mark (tonos, U+0301 once decomposed): decks whose lang sets
+// looseStress accept an answer typed without any stress mark, and show the
+// properly stressed form afterwards (see attemptField).
+function stripStress(s){ return s.normalize("NFD").replace(/́/g,"").normalize("NFC"); }
+function hasStress(s){ return /́/.test(s.normalize("NFD")); }
 function stripParens(s){ return s.replace(/\s*\([^)]*\)\s*/g," ").trim(); }
 function acceptableSet(fullText){
   var base = stripParens(fullText);
@@ -1200,6 +1205,9 @@ function promptEyebrow(e){
   }
   if(e.kind==="cloze") return "Вставь пропущенное слово";
   if(e.kind==="conjug"){
+    if(deck && deck.conjugPrompt){
+      return conjugShowsRussian(e) ? "Переведи на "+lang.name+" · "+deck.conjugPrompt : deck.conjugPrompt;
+    }
     var tenseText = (deck && deck.conjugTenseText) || "в настоящем времени (présent)";
     return conjugShowsRussian(e)
       ? "Переведи на "+lang.name+" и проспрягай "+tenseText
@@ -1738,6 +1746,11 @@ function attemptField(field, rawValue, clickedBtn){
   var answer = fieldAnswer(current, field);
   var ok = acceptableSet(answer)[normalize(rawValue)] === true;
   var mode = currentBox()<=2 ? "choice" : "type";
+  var stressNote = false;
+  if(!ok && mode==="type" && deckLang(current).looseStress && !hasStress(rawValue)
+     && acceptableSet(stripStress(answer))[normalize(rawValue)] === true){
+    ok = true; stressNote = true;
+  }
 
   if(!ok){
     // wrong attempt: mark it, give feedback, but let her try again —
@@ -1771,6 +1784,10 @@ function attemptField(field, rawValue, clickedBtn){
     input.classList.remove("wrong");
     input.classList.add("correct");
     input.disabled = true;
+    if(stressNote){
+      var noteEl = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]');
+      if(noteEl){ noteEl.textContent = "Ударение: "+answer; noteEl.hidden = false; }
+    }
     focusOtherField(field);
   }
   var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
@@ -2344,7 +2361,7 @@ function showDeckForEdit(deckId){
     : deck.kind==="cloze"
     ? "Формат: фраза с ___;ответ;ловушка1|ловушка2|ловушка3;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : deck.kind==="conjug"
-    ? "Формат: infinitif;"+conjugFields(deckId).join("|")+";перевод;я…|ты…|он…|мы…|вы…|они… — по одной строке (6 форм через |, в порядке "+conjugFields(deckId).map(function(f){ return conjugLabel(deckId,f); }).join("/")+"; последняя часть с переводом по лицам необязательна — показывается рядом с местоимением на компьютере). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
+    ? "Формат: infinitif;"+conjugFields(deckId).join("|")+";перевод;я…|ты…|он…|мы…|вы…|они… — по одной строке ("+conjugFields(deckId).length+" форм через |, в порядке "+conjugFields(deckId).map(function(f){ return conjugLabel(deckId,f); }).join("/")+"; последняя часть с переводом по лицам необязательна — показывается рядом с местоимением на компьютере). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : "Формат: слово;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится.";
   editArea.value = deck.words.map(function(w){
     if(deck.kind==="cloze") return [w[0], w[1], w[2].join("|"), w[3]].join(";");

@@ -168,7 +168,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 @keyframes dotPop{0%{transform:scale(.3);opacity:.4;}55%{transform:scale(2);opacity:1;}100%{transform:scale(1);opacity:1;}}
 .dot.pop{animation:dotPop .45s ease-out;}
 
-.ruword{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:2.35rem;text-align:center;padding-block:6px;letter-spacing:-0.015em;}
+.ruword{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:clamp(1.6rem,7vw,2.35rem);overflow-wrap:anywhere;text-align:center;padding-block:6px;letter-spacing:-0.015em;}
 .ruword-translation{font-family:"Public Sans",ui-sans-serif,system-ui,sans-serif;font-weight:400;font-size:1rem;color:var(--ink-muted);letter-spacing:normal;margin-top:4px;}
 .deck-tag{font-size:.7rem;color:var(--ink-muted);text-align:right;}
 
@@ -183,8 +183,8 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
      was still the default (flex-start), so each field only ever sized to
      its own content instead of filling the row — that's what made inputs
      and choice buttons look like they only took up half the screen width. */
-  .fields-row{flex-direction:column;align-items:stretch;}
-  .field{flex-basis:auto;}
+  .fields-row{flex-direction:column;flex-wrap:nowrap;align-items:stretch;}
+  .field{flex-basis:auto;min-width:0;max-width:100%;}
 }
 @media (min-width:481px){
   /* A conjugation card always has exactly 6 fields, which already wrap
@@ -220,8 +220,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .choices{display:flex;flex-direction:column;gap:7px;}
 .choice-btn{
   text-align:left;padding:10px 16px;border-radius:9px;border:1px solid var(--border);
-  background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+  background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem;white-space:normal;overflow-wrap:anywhere;cursor:pointer;
   box-shadow:0 1px 2px rgba(32,29,26,.06);transition:box-shadow .15s ease,border-color .15s ease,transform .1s ease;
 }
 .choice-btn:hover{border-color:var(--accent-2);box-shadow:0 2px 6px rgba(32,29,26,.1);transform:translateY(-1px);}
@@ -989,10 +988,12 @@ function acceptableSet(fullText){
   var set = {};
   set[normalize(fullText)] = true;
   set[normalize(base)] = true;
-  base.split(",").forEach(function(part){
-    part = part.trim();
-    if(part) set[normalize(part)] = true;
-  });
+  // "αρχαίος, -α, -ο"-style alternatives may each be typed alone, but a comma inside a sentence is just
+  // punctuation: only split when every comma-separated part is a single word.
+  var parts = base.split(",").map(function(p){ return p.trim(); }).filter(Boolean);
+  if(parts.every(function(p){ return p.indexOf(" ")===-1; })){
+    parts.forEach(function(part){ set[normalize(part)] = true; });
+  }
   return set;
 }
 function hintSeed(fullText){
@@ -1056,13 +1057,30 @@ if(typeof speechSynthesis !== "undefined"){
 }
 function voiceForLangCode(code){
   var prefix = (code||"fr-FR").split("-")[0].toLowerCase();
-  return allVoices.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf(prefix)===0; }) || null;
+  var want = (code||"fr-FR").toLowerCase();
+  var best = null, bestScore = -1;
+  allVoices.forEach(function(v){
+    var lang = (v.lang||"").toLowerCase().replace("_","-");
+    if(lang.indexOf(prefix)!==0) return;
+    // exact region match first, then the nicer-sounding voice variants
+    // (macOS Premium/Enhanced, Chrome's Google voices) over the basic ones.
+    var score = (lang===want ? 10 : 0)
+      + (/premium/i.test(v.name) ? 30 : 0)
+      + (/enhanced|улучш|расшир/i.test(v.name) ? 20 : 0)
+      + (/google/i.test(v.name) ? 15 : 0);
+    if(score>bestScore){ best = v; bestScore = score; }
+  });
+  return best;
 }
 function makeUtterance(text, langCode){
   var code = langCode || "fr-FR";
   var u = new SpeechSynthesisUtterance(text);
   u.lang = code;
   var v = voiceForLangCode(code);
+  // No voice for this language installed: stay silent rather than let the
+  // browser read it with its default (e.g. English) voice. If the voice list
+  // hasn't loaded yet, fall back to the old behaviour (lang only).
+  if(!v && allVoices.length) return null;
   if(v) u.voice = v;
   u.rate = 0.92;
   return u;
@@ -1072,7 +1090,11 @@ function makeUtterance(text, langCode){
 function speakFR(text, deckId){
   var deck = deckId && state.decks[deckId];
   var lang = (deck && deck.lang) || DEFAULT_LANG;
-  try{ speechSynthesis.cancel(); speechSynthesis.speak(makeUtterance(text, lang.code)); }catch(e){}
+  try{
+    var u = makeUtterance(text, lang.code);
+    speechSynthesis.cancel();
+    if(u) speechSynthesis.speak(u);
+  }catch(e){}
 }
 
 // ---- decks / entries / queue ----
@@ -1121,7 +1143,8 @@ function requiredFields(e){
   // (word[0]!==word[1]) get a second field; the rest behave like a single
   // plain word.
   if(e.kind==="number") return e.word[0]===e.word[1] ? ["a"] : ["a","b"];
-  if(e.kind==="conjug") return conjugFields(e.deckId);
+  // A form left empty (e.g. no imperative for "умирать") is simply not asked.
+  if(e.kind==="conjug") return conjugFields(e.deckId).filter(function(f){ return !!e.word[1][conjugIdx(e.deckId, f)]; });
   return ["a"];
 }
 

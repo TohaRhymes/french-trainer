@@ -1918,6 +1918,12 @@ function renderCard(){
     typoBtn.textContent = "Учтено";
     if(roundFinished && !cleanApplied){
       cleanApplied = true;
+      // Undo the mistake's own effect first (a learned word drops a box on
+      // a mistake, see applyProgress), so the clean answer is scored from
+      // where the word stood before this round, not on top of the drop.
+      if(!freePractice && lastUndo && lastUndo.key===entryProgKey(current)){
+        state.progress[lastUndo.key] = JSON.parse(JSON.stringify(lastUndo.prev));
+      }
       var oldBox = freePractice ? null : currentBox();
       applyProgress(true);
       var leveledUp = animateBoxLevelUp(oldBox);
@@ -2371,6 +2377,16 @@ function applyProgress(clean){
     // of moving further out (and instead of sitting stuck on "today" forever
     // if she doesn't reopen the trainer again the same day).
     p.due = addDays(todayStr(), 1);
+    // A learned word is the exception: a mistake after weeks away means it
+    // wasn't as solid as its 16–60-day interval assumed, so it drops back
+    // to box 4 and loses "выучено". The next clean answer re-learns it at
+    // 16 days and the growth (×1.6, up to 60) restarts from there, instead
+    // of carrying on from the old interval as if nothing happened.
+    if(p.box>=5){
+      p.box = 4;
+      p.learned = false;
+      delete p.interval;
+    }
   }
   if(!wasLearned && p.learned){ batchLearned++; lastUndo.learnedNow = true; }
   var patch = {progress:{}};

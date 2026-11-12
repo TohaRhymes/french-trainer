@@ -229,8 +229,13 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
    and distinct visual weight instead of two identical button grids. */
 .match-wrap{display:flex;gap:12px;align-items:stretch;}
 .match-col{min-width:0;display:flex;flex-direction:column;gap:8px;}
-.match-col.pronouns{flex:0 0 clamp(96px, 30vw, 124px);}
+/* Sized to the longest label (at least the old fixed width), so a deck
+   with longer field names ("Превосходная") isn't cut to "Превосх…". */
+.match-col.pronouns{flex:0 0 auto;min-width:clamp(96px, 30vw, 124px);max-width:45%;}
 .match-col.forms{flex:1 1 0;}
+/* Long forms ("les plus mauvaises") wrap instead of being cut
+   off on a phone. */
+.match-form{white-space:normal;}
 .match-row{display:flex;align-items:center;gap:5px;}
 /* single-class selectors on purpose: keeps specificity equal to .choice-btn's
    own base rule, so this only overrides the shared resting look (which it
@@ -246,6 +251,10 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   background:var(--accent);color:var(--accent-ink);border-color:var(--accent);box-shadow:none;
 }
 .match-row .hintbtn{width:22px;height:22px;flex:none;opacity:.55;}
+/* The "?" turns into a replay button once matched: keep it the same 22px,
+   or the content-sized label column widens and the whole card shifts. */
+.match-row .speakmini{width:22px;height:22px;}
+.match-row .speakmini svg{width:11px;height:11px;}
 .match-row .hintbtn:hover{opacity:1;}
 .match-form{font-weight:500;}
 
@@ -687,6 +696,47 @@ var DEFAULT_DECKS = {
       ["Il ___ ❄️","neige",["fait","y a","pleut"],"идёт снег"],
       ["Il ___ 🧊","grêle",["fait","y a","neige"],"идёт град"]
     ]
+  },
+  // The full bon/bien/mauvais/mal paradigm (GitHub issue #1, part 1): each
+  // card is one gender/number form, and its three fields are the chain
+  // base → comparative → superlative, so the whole chain is recalled with
+  // agreement, not one word picked out of a sentence. Built on the conjug
+  // kind with its own `pronouns` (the three degrees). Only "plus mauvais"
+  // is taught — "pire" was dropped on request.
+  "comparatifs-chaines": {
+    name: "Цепочки сравнения",
+    kind: "conjug",
+    pronouns: [
+      {field:"base", label:"Обычная", say:""},
+      {field:"comp", label:"Сравнение", say:""},
+      {field:"sup", label:"Превосходная", say:""}
+    ],
+    conjugEyebrow: "Цепочка: обычная → сравнение → превосходная",
+    conjugEyebrowRu: "Переведи и построй цепочку сравнения",
+    promptBeforeDot: true,
+    renamedWords: {"bien · наречие":"bien", "mal · наречие":"mal"},
+    words: [
+      ["bon · м.р. ед.ч.",["bon","meilleur","le meilleur"],"хороший (прилагательное, м.р., ед.ч.)",
+        ["хороший","лучше","самый лучший"]],
+      ["bon · ж.р. ед.ч.",["bonne","meilleure","la meilleure"],"хорошая (прилагательное, ж.р., ед.ч.)",
+        ["хорошая","лучше","самая лучшая"]],
+      ["bon · м.р. мн.ч.",["bons","meilleurs","les meilleurs"],"хорошие (прилагательное, м.р., мн.ч.)",
+        ["хорошие","лучше","самые лучшие"]],
+      ["bon · ж.р. мн.ч.",["bonnes","meilleures","les meilleures"],"хорошие (прилагательное, ж.р., мн.ч.)",
+        ["хорошие","лучше","самые лучшие"]],
+      ["bien",["bien","mieux","le mieux"],"хорошо (наречие)",
+        ["хорошо","лучше","лучше всего"]],
+      ["mauvais · м.р. ед.ч.",["mauvais","plus mauvais","le plus mauvais"],"плохой (прилагательное, м.р., ед.ч.)",
+        ["плохой","хуже","самый плохой"]],
+      ["mauvais · ж.р. ед.ч.",["mauvaise","plus mauvaise","la plus mauvaise"],"плохая (прилагательное, ж.р., ед.ч.)",
+        ["плохая","хуже","самая плохая"]],
+      ["mauvais · м.р. мн.ч.",["mauvais","plus mauvais","les plus mauvais"],"плохие (прилагательное, м.р., мн.ч.)",
+        ["плохие","хуже","самые плохие"]],
+      ["mauvais · ж.р. мн.ч.",["mauvaises","plus mauvaises","les plus mauvaises"],"плохие (прилагательное, ж.р., мн.ч.)",
+        ["плохие","хуже","самые плохие"]],
+      ["mal",["mal","plus mal","le plus mal"],"плохо (наречие)",
+        ["плохо","хуже","хуже всего"]]
+    ]
   }
 };
 
@@ -767,6 +817,24 @@ function normalizeState(raw){
     // наборы" (see availableDeckIds()/adoptDeck()). Only a deck the user
     // already has gets kept in sync with the catalog below.
     //
+    // A catalog deck can rename a word's first field (its key) via
+    // `renamedWords` {oldKey: newFirstField}: the word and its progress
+    // (and today's daily records) move to the new key, so the rename
+    // neither resets progress nor leaves a stale duplicate behind.
+    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+      var ren = DEFAULT_DECKS[deckId].renamedWords;
+      if(!ren || !s.decks[deckId]) return;
+      s.decks[deckId].words.forEach(function(w){
+        var newFirst = ren[wordKey(w[0])];
+        if(!newFirst) return;
+        var oldK = deckProgKey(deckId, wordKey(w[0])), newK = deckProgKey(deckId, wordKey(newFirst));
+        [s.progress, s.daily.words, s.daily.cleanWords, s.daily.reviewedErrors].forEach(function(map){
+          if(map[oldK]!==undefined && map[newK]===undefined) map[newK] = map[oldK];
+          delete map[oldK];
+        });
+        w[0] = newFirst;
+      });
+    });
     // Backfill new words added to a catalog deck's entry AFTER this user
     // already had that deck (e.g. two more Passé Composé verbs added
     // later) — matched by French term so it never touches/duplicates a
@@ -795,6 +863,12 @@ function normalizeState(raw){
       s.decks[deckId].words.forEach(function(w, i){
         var catalogWord = catalogByKey[wordKey(w[0])];
         if(catalogWord) s.decks[deckId].words[i] = JSON.parse(JSON.stringify(catalogWord));
+      });
+      // Same for the deck's display settings (field labels, eyebrow text):
+      // they're copied in at adoption, so a later rename in the catalog
+      // would otherwise never reach a deck the user already has.
+      ["pronouns","conjugEyebrow","conjugEyebrowRu","promptBeforeDot"].forEach(function(prop){
+        if(DEFAULT_DECKS[deckId][prop]) s.decks[deckId][prop] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId][prop]));
       });
     });
     Object.keys(s.decks).forEach(function(deckId){
@@ -1179,7 +1253,7 @@ function frenchAudioFor(e, field){
     var prompt = stripEmoji(e.word[0]);
     return prompt.indexOf("___")!==-1 ? prompt.replace("___", e.word[1]) : e.word[1];
   }
-  if(e.kind==="conjug") return conjugSay(e.deckId, field)+" "+fieldAnswer(e, field);
+  if(e.kind==="conjug") return (conjugSay(e.deckId, field)+" "+fieldAnswer(e, field)).trim();
   return e.word[0];
 }
 // At box 5 (the last, most-practiced level) a conjug card shows the Russian
@@ -1203,7 +1277,12 @@ function promptText(e){
     }
     return e.word[0];
   }
-  if(e.kind==="conjug") return conjugShowsRussian(e) ? e.word[2] : e.word[0];
+  if(e.kind==="conjug"){
+    if(conjugShowsRussian(e)) return e.word[2];
+    // "bon · ж.р. мн.ч.": the part after " · " only keeps the key unique
+    // (four bon cards); gender/number is already in the hint line below.
+    return state.decks[e.deckId].promptBeforeDot ? e.word[0].split(" · ")[0] : e.word[0];
+  }
   return e.direction==="ru2fr" ? e.word[1] : e.word[0];
 }
 function promptEyebrow(e){
@@ -1216,6 +1295,11 @@ function promptEyebrow(e){
   }
   if(e.kind==="cloze") return "Вставь пропущенное слово";
   if(e.kind==="conjug"){
+    // A conjug-kind deck that isn't about verbs (comparatifs-chaines) words
+    // its own eyebrow instead of "Проспрягай ...".
+    if(deck && deck.conjugEyebrow){
+      return conjugShowsRussian(e) ? (deck.conjugEyebrowRu || deck.conjugEyebrow) : deck.conjugEyebrow;
+    }
     var tenseText = (deck && deck.conjugTenseText) || "в настоящем времени (présent)";
     return conjugShowsRussian(e)
       ? "Переведи на "+lang.name+" и проспрягай "+tenseText
@@ -1559,6 +1643,38 @@ function renderMatchHtml(entry){
   return '<div class="match-col pronouns">'+pronounsHtml+'</div><div class="match-col forms">'+formsHtml+'</div>';
 }
 
+// A correctly matched form slides into the row opposite its label, so the
+// finished card reads as label → form pairs (and each row's replay button
+// sits next to the form it actually speaks). It swaps places with whatever
+// unmatched form held that slot; FLIP-animated unless reduced motion is on.
+function moveFormOpposite(btn, rowIdx){
+  var col = btn.parentNode;
+  var slot = col.children[rowIdx];
+  if(!slot || slot===btn) return;
+  var moved = [btn, slot];
+  var before = moved.map(function(el){ return el.getBoundingClientRect(); });
+  var marker = document.createElement("span");
+  col.insertBefore(marker, btn);
+  col.insertBefore(btn, slot);
+  col.insertBefore(slot, marker);
+  col.removeChild(marker);
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduce) return;
+  moved.forEach(function(el, i){
+    var after = el.getBoundingClientRect();
+    var dy = before[i].top - after.top;
+    if(!dy) return;
+    el.style.transition = "none";
+    el.style.transform = "translateY("+dy+"px)";
+    el.getBoundingClientRect();
+    el.style.transition = "transform .28s ease";
+    el.style.transform = "";
+    el.addEventListener("transitionend", function clear(){
+      el.style.transition = ""; el.removeEventListener("transitionend", clear);
+    });
+  });
+}
+
 function bindMatchHandlers(entry){
   Array.prototype.forEach.call(cardArea.querySelectorAll(".match-pronoun"), function(btn){
     btn.onclick = function(){
@@ -1579,6 +1695,7 @@ function bindMatchHandlers(entry){
         btn.disabled = true; btn.classList.add("correct");
         var pBtn = cardArea.querySelector('.match-pronoun[data-field="'+field+'"]');
         pBtn.disabled = true; pBtn.classList.remove("selected"); pBtn.classList.add("correct");
+        moveFormOpposite(btn, requiredFields(entry).indexOf(field));
         var hintBtn = cardArea.querySelector('.match-row[data-field="'+field+'"] .hintbtn');
         var frenchAudio = frenchAudioFor(entry, field);
         turnIntoReplay(hintBtn, frenchAudio);

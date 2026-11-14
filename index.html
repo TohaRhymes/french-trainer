@@ -235,7 +235,7 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
    and distinct visual weight instead of two identical button grids. */
 .match-wrap{display:flex;gap:12px;align-items:stretch;}
 .match-col{min-width:0;display:flex;flex-direction:column;gap:8px;}
-.match-col.pronouns{flex:0 0 clamp(96px, 30vw, 124px);}
+.match-col.pronouns{flex:0 0 clamp(108px, 32vw, 136px);}
 .match-col.forms{flex:1 1 0;}
 .match-row{display:flex;align-items:center;gap:5px;}
 /* single-class selectors on purpose: keeps specificity equal to .choice-btn's
@@ -243,8 +243,8 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
    declares later in the sheet) while leaving .correct/.wrong/.removed free
    to still win on their own higher specificity. */
 .match-pronoun{
-  flex:1;min-width:0;text-align:center;padding-inline:6px;
-  font-family:"Fraunces",Georgia,serif;font-weight:600;
+  flex:1;min-width:0;text-align:center;padding-inline:4px;
+  font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:.84rem;overflow-wrap:normal;word-break:normal;
   background:var(--surface-2);border-color:transparent;
 }
 .match-pronoun:hover{border-color:var(--accent-2);}
@@ -264,6 +264,17 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .type-input.correct{border-color:var(--success);background:var(--success-bg);}
 .type-input.wrong{border-color:var(--danger);background:var(--danger-bg);}
 .reveal-label{font-size:.82rem;color:var(--accent-2);font-style:italic;}
+.fb{font-size:.9rem;font-weight:600;padding:6px 10px;border-radius:8px;margin-top:6px;line-height:1.35;overflow-wrap:anywhere;}
+.fb.ok{color:var(--success);background:var(--success-bg);}
+.fb.bad{color:var(--danger);background:var(--danger-bg);}
+.fb.info{color:var(--accent-2);background:transparent;padding-left:0;font-weight:500;font-style:italic;}
+.fb .fb-ans{font-family:inherit;font-weight:700;text-decoration:underline;text-underline-offset:2px;}
+.type-input.wrong{animation:fbshake .28s;}
+@keyframes fbshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.round-banner{font-weight:700;font-size:.95rem;padding:10px 12px;border-radius:10px;margin-top:12px;text-align:center;}
+.round-banner.ok{color:var(--success);background:var(--success-bg);}
+.round-banner.bad{color:var(--danger);background:var(--danger-bg);}
+.undo-btn{margin-top:8px;width:100%;}
 .accent-row{display:flex;flex-wrap:wrap;gap:5px;}
 .accent-key{
   width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:var(--surface);
@@ -1250,7 +1261,7 @@ function promptEyebrow(e){
   if(e.kind==="cloze") return "Вставь пропущенное слово";
   if(e.kind==="conjug"){
     if(deck && deck.conjugPrompt){
-      return conjugShowsRussian(e) ? "Переведи на "+lang.name+" · "+deck.conjugPrompt : deck.conjugPrompt;
+      return conjugShowsRussian(e) ? "Переведи на "+lang.name+" · "+deck.conjugPrompt : "Шаг 2 из 2 · "+deck.conjugPrompt;
     }
     var tenseText = (deck && deck.conjugTenseText) || "в настоящем времени (présent)";
     return conjugShowsRussian(e)
@@ -1339,6 +1350,9 @@ var mistaken = {};
 var selectedPronounField = null; // matching-mode (conjug, box<=2): the tapped pronoun awaiting a form
 var roundFinished = false;   // finishWordRound() already scored this entry
 var cleanApplied = false;    // the "it was a typo" button already fixed up the score
+var findDone = false;        // conjug step 1 (find the foreign form for the Russian meaning) passed
+var stepMistake = false;     // a wrong pick in step 1 — the word can't be a clean round any more
+var lastUndo = null;         // snapshot for "откатить результат" of the word just scored
 var batchSeen = 0, batchCorrect = 0, batchLearned = 0, batchTotal = 0;
 
 function currentBox(){ return state.progress[entryProgKey(current)].box; }
@@ -1502,6 +1516,9 @@ function nextWord(){
   selectedPronounField = null;
   roundFinished = false;
   cleanApplied = false;
+  findDone = false;
+  stepMistake = false;
+  lastUndo = null;
   updateProgressBar();
   renderCard();
 }
@@ -1535,8 +1552,26 @@ function fieldBlock(entry, field){
       '<span class="reveal-label" data-reveal="'+field+'" hidden></span>'+
       (needsAccent ? '<div class="accent-row" data-accent="'+field+'" hidden></div>' : '');
   }
+  html += '<div class="fb" data-fb="'+field+'" role="status" hidden></div>';
   html += '</div>';
   return html;
+}
+
+// Explicit right/wrong line under a field (or under the matching grid):
+// kind = ok | bad | info. Text is set via textContent so a typed answer can
+// never inject markup; the correct form, when shown, goes in its own span.
+function setFb(field, kind, text, answerPart){
+  var el = cardArea.querySelector('.fb[data-fb="'+field+'"]') || cardArea.querySelector('.fb[data-fb="__match"]');
+  if(!el) return;
+  el.className = "fb "+kind;
+  el.textContent = text;
+  if(answerPart){
+    var span = document.createElement("span");
+    span.className = "fb-ans";
+    span.textContent = answerPart;
+    el.appendChild(span);
+  }
+  el.hidden = false;
 }
 
 // conjug, box 1-2: tap a pronoun then tap its matching form instead of
@@ -1583,10 +1618,12 @@ function bindMatchHandlers(entry){
         turnIntoReplay(hintBtn, frenchAudio);
         speakFR(frenchAudio, entry.deckId);
         selectedPronounField = null;
+        setFb("__match", "ok", "✓ Верно");
         if(requiredFields(entry).every(function(f){ return resolved[f]; })) finishWordRound();
       } else {
         mistaken[field] = true;
         document.getElementById("typoBtn").hidden = false;
+        setFb("__match", "bad", "✗ Неверно — эта форма не подходит к «"+fieldLabel(entry, field)+"»");
         btn.classList.add("wrong");
         setTimeout(function(){ btn.classList.remove("wrong"); }, 500);
       }
@@ -1611,7 +1648,61 @@ function bindMatchHandlers(entry){
   });
 }
 
+// conjug step 1 (boxes 1-4): the Russian meaning is the prompt and she picks
+// the matching foreign verb out of four; only then comes the usual card
+// (forms matching / typing). From box 5 the card already starts from the
+// Russian and asks for everything by typing, so this step is skipped there.
+function renderFindStep(){
+  var box = currentBox();
+  var dots = "";
+  for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
+  var deck = state.decks[current.deckId];
+  var lang = deckLang(current);
+  var correct = current.word[0];
+  var re = articleRegexFor(deck);
+  var cands = [], seen = {};
+  seen[normalize(correct)] = true;
+  deck.words.forEach(function(w){
+    var n = normalize(w[0]);
+    if(seen[n]) return;
+    seen[n] = true; cands.push(w[0]);
+  });
+  cands.sort(function(a,b){ return distractorScore(correct,b,re) - distractorScore(correct,a,re); });
+  var pool = cands.slice(0, Math.min(8, cands.length));
+  shuffle(pool);
+  var options = shuffle(pool.slice(0,3).concat([correct]));
+  var html = ''+
+    '<div class="eyebrow"><span>Шаг 1 из 2 · найди перевод на '+lang.name+(freePractice?' · свободно':'')+'</span><span class="box-dots">'+dots+'</span></div>'+
+    '<div class="ruword">'+current.word[2]+'</div>'+
+    '<div class="fields-row"><div class="field"><div class="choices" data-group="find">'+
+    options.map(function(opt){
+      return '<button type="button" class="choice-btn" data-val="'+opt.replace(/"/g,"&quot;")+'">'+opt+'</button>';
+    }).join("")+
+    '</div><div class="fb" data-fb="find" role="status" hidden></div></div></div>'+
+    (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deck.name+'</div>' : '');
+  cardArea.innerHTML = html;
+  Array.prototype.forEach.call(cardArea.querySelectorAll(".choice-btn"), function(btn){
+    btn.onclick = function(){
+      if(findDone) return;
+      if(normalize(btn.dataset.val)===normalize(correct)){
+        findDone = true;
+        Array.prototype.forEach.call(cardArea.querySelectorAll(".choice-btn"), function(b){ b.disabled = true; });
+        btn.classList.remove("wrong"); btn.classList.add("correct");
+        setFb("find", "ok", "✓ Верно — теперь формы");
+        speakFR(correct, current.deckId);
+        var shown = current;
+        setTimeout(function(){ if(current===shown) renderCard(); }, 800);
+      } else {
+        stepMistake = true;
+        btn.classList.add("wrong"); btn.disabled = true;
+        setFb("find", "bad", "✗ Неверно — выбери другой вариант");
+      }
+    };
+  });
+}
+
 function renderCard(){
+  if(current.kind==="conjug" && !conjugShowsRussian(current) && !findDone){ renderFindStep(); return; }
   var box = currentBox();
   var dots = "";
   for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
@@ -1631,6 +1722,7 @@ function renderCard(){
     '<div class="ruword">'+promptText(current)+'</div>'+
     (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
     '<div class="'+(isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
+    (isMatching ? '<div class="fb" data-fb="__match" role="status" hidden></div>' : '')+
     '<button type="button" class="btn ghost typo-btn" id="typoBtn" hidden>Это опечатка</button>'+
     (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deckName+'</div>' : '');
   cardArea.innerHTML = html;
@@ -1638,6 +1730,7 @@ function renderCard(){
   var typoBtn = document.getElementById("typoBtn");
   typoBtn.onclick = function(){
     requiredFields(current).forEach(function(f){ mistaken[f] = false; });
+    stepMistake = false;
     typoBtn.disabled = true;
     typoBtn.textContent = "Учтено";
     if(roundFinished && !cleanApplied){
@@ -1808,8 +1901,23 @@ function attemptField(field, rawValue, clickedBtn){
     if(mode==="choice" && clickedBtn){
       clickedBtn.classList.add("wrong");
       clickedBtn.disabled = true;
+      setFb(field, "bad", "✗ Неверно — выбери другой вариант");
     } else if(mode==="type"){
-      document.getElementById("input-"+field).classList.add("wrong");
+      var wrongInput = document.getElementById("input-"+field);
+      wrongInput.classList.remove("wrong");
+      void wrongInput.offsetWidth; // restart the shake animation on repeat misses
+      wrongInput.classList.add("wrong");
+      // Always show the right form after a miss (the word won't count as
+      // clean anyway): either "your letters are right, the stress is not",
+      // or just the answer. She still has to type it herself to move on.
+      var stressOnly = deckLang(current).looseStress && hasStress(rawValue)
+        && acceptableSet(stripStress(answer))[stripStress(normalize(rawValue))] === true;
+      setFb(field, "bad", stressOnly ? "✗ Ударение неверно. Правильно: " : "✗ Неверно. Правильно: ", answer);
+      revealed[field] = true; hinted[field] = true;
+      var rb = cardArea.querySelector('.revealbtn[data-field="'+field+'"]'); if(rb) rb.disabled = true;
+      var hb = cardArea.querySelector('.hintbtn[data-field="'+field+'"]'); if(hb) hb.disabled = true;
+      var oldLabel = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]'); if(oldLabel) oldLabel.hidden = true;
+      try{ wrongInput.select(); }catch(e){}
     }
     return;
   }
@@ -1823,15 +1931,17 @@ function attemptField(field, rawValue, clickedBtn){
     Array.prototype.forEach.call(group.querySelectorAll(".choice-btn"), function(b){ b.disabled = true; });
     clickedBtn.classList.remove("wrong");
     clickedBtn.classList.add("correct");
+    setFb(field, "ok", "✓ Верно");
   } else {
     var input = document.getElementById("input-"+field);
     input.classList.remove("wrong");
     input.classList.add("correct");
     input.disabled = true;
-    if(stressNote){
-      var noteEl = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]');
-      if(noteEl){ noteEl.textContent = "Ударение: "+answer; noteEl.hidden = false; }
-    }
+    var lbl = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]');
+    if(lbl) lbl.hidden = true;
+    if(stressNote) setFb(field, "ok", "✓ Верно, но ударение: ", answer);
+    else if(revealed[field]) setFb(field, "ok", "✓ Верно (после ошибки или подсказки)");
+    else setFb(field, "ok", "✓ Верно");
     focusOtherField(field);
   }
   var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
@@ -1914,7 +2024,7 @@ function animateBoxLevelUp(oldBox){
 
 function finishWordRound(){
   var fields = requiredFields(current);
-  var clean = !fields.some(function(f){ return mistaken[f] || hinted[f]; });
+  var clean = !stepMistake && !fields.some(function(f){ return mistaken[f] || hinted[f]; });
   var oldBox = freePractice ? null : currentBox();
   applyProgress(clean);
   roundFinished = true;
@@ -1975,11 +2085,50 @@ function finishWordRound(){
     row.appendChild(typoBtn);
   }
   row.appendChild(cont);
+  var banner = document.createElement("div");
+  if(freePractice){
+    banner.className = "round-banner ok";
+    banner.textContent = clean ? "✓ Всё верно (свободная практика — прогресс не меняется)" : "Были ошибки или подсказки (свободная практика — прогресс не меняется)";
+  } else if(clean){
+    banner.className = "round-banner ok";
+    banner.textContent = "✓ Всё верно, без подсказок — слово идёт дальше";
+  } else {
+    banner.className = "round-banner bad";
+    banner.textContent = "✗ Были ошибки или подсказки — слово вернётся завтра";
+  }
+  cardArea.appendChild(banner);
   cardArea.appendChild(row);
+  if(!freePractice && !reviewingErrors && lastUndo){
+    var undo = document.createElement("button");
+    undo.type = "button"; undo.className = "btn ghost undo-btn"; undo.id = "undoBtn";
+    undo.textContent = "↩ Откатить результат (повторить слово)";
+    undo.onclick = undoLastResult;
+    cardArea.appendChild(undo);
+  }
 
   if(isMobileLayout()){
     setTimeout(function(){ cont.scrollIntoView({block:"center", behavior:"smooth"}); }, 50);
   }
+}
+
+// Rolls the word just scored back to how it was before (box, due date,
+// today's counters) and puts it first in the queue to be answered again.
+function undoLastResult(){
+  if(!lastUndo || !current || freePractice || reviewingErrors) return;
+  var u = lastUndo;
+  var prev = u.prev;
+  if(prev.interval===undefined) delete prev.interval;
+  state.progress[u.key] = prev;
+  delete state.daily.words[u.key];
+  delete state.daily.cleanWords[u.key];
+  batchSeen = Math.max(0, batchSeen-1);
+  if(u.clean) batchCorrect = Math.max(0, batchCorrect-1);
+  if(u.learnedNow) batchLearned = Math.max(0, batchLearned-1);
+  lastUndo = null;
+  saveState();   // full write: patchState's merge can't remove keys
+  queue.unshift(current);
+  renderStats();
+  nextWord();
 }
 
 function applyProgress(clean){
@@ -1987,6 +2136,7 @@ function applyProgress(clean){
   var key = entryProgKey(current);
   var p = state.progress[key];
   var wasLearned = p.learned;
+  lastUndo = {key:key, prev:JSON.parse(JSON.stringify(p)), clean:clean, learnedNow:false};
 
   if(clean){
     p.box = Math.min(p.box+1, 5);
@@ -2004,7 +2154,7 @@ function applyProgress(clean){
     // if she doesn't reopen the trainer again the same day).
     p.due = addDays(todayStr(), 1);
   }
-  if(!wasLearned && p.learned) batchLearned++;
+  if(!wasLearned && p.learned){ batchLearned++; lastUndo.learnedNow = true; }
   var patch = {progress:{}};
   patch.progress[key] = p;
   patchState(patch);

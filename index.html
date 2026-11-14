@@ -987,7 +987,7 @@ function adoptDeck(deckId){
 var state = null;
 
 // ---- answer matching ----
-function normalize(s){ return s.trim().toLowerCase().replace(/\s+/g," "); }
+function normalize(s){ return s.trim().normalize("NFC").toLowerCase().replace(/\s+/g," "); }
 // Greek stress mark (tonos, U+0301 once decomposed): decks whose lang sets
 // looseStress accept an answer typed without any stress mark, and show the
 // properly stressed form afterwards (see attemptField).
@@ -999,13 +999,39 @@ function acceptableSet(fullText){
   var set = {};
   set[normalize(fullText)] = true;
   set[normalize(base)] = true;
+  // a forgotten full stop / "!" / "?" at the very end isn't a mistake
+  var noEnd = base.replace(/[.!?…]+$/, "").trim();
+  if(noEnd) set[normalize(noEnd)] = true;
   // "αρχαίος, -α, -ο"-style alternatives may each be typed alone, but a comma inside a sentence is just
   // punctuation: only split when every comma-separated part is a single word.
   var parts = base.split(",").map(function(p){ return p.trim(); }).filter(Boolean);
   if(parts.every(function(p){ return p.indexOf(" ")===-1; })){
-    parts.forEach(function(part){ set[normalize(part)] = true; });
+    parts.forEach(function(part){ if(part.charAt(0)!=="-") set[normalize(part)] = true; });
   }
   return set;
+}
+
+// "αρχαίος, -α, -ο" / "δημοκρατικός, -ή, -ό" -> the three full forms, so any
+// gender can be typed. null when the text isn't in that shape.
+function genderForms(fullText){
+  var m = stripParens(fullText).match(/^(\S+?)(ός|ος),\s*-(\S+),\s*-(\S+)$/);
+  if(!m) return null;
+  var stem = m[1];
+  return {m: m[1]+m[2], f: stem+m[3], n: stem+m[4]};
+}
+
+// progressive hint: 2 letters first (1 for very short words), +1 letter per
+// press, never the whole word. A leading article is shown as-is and not counted.
+function hintStep(answer, level, deck){
+  var g = genderForms(answer);
+  var target = g ? g.m : stripParens(answer).split(",")[0].trim();
+  target = target.replace(/[.!?…]+$/, "");
+  var core = stripLeadingArticle(target, articleRegexFor(deck));
+  var art = target.slice(0, target.length-core.length);
+  var chars = Array.from(core.normalize("NFC"));
+  var start = chars.length<=3 ? 1 : 2;
+  var n = Math.max(1, Math.min(start+level-1, chars.length-1));
+  return {text: art+chars.slice(0,n).join("")+"…", maxed: n>=chars.length-1};
 }
 function hintSeed(fullText){
   var base = stripParens(fullText);
@@ -1350,6 +1376,7 @@ var mistaken = {};
 var selectedPronounField = null; // matching-mode (conjug, box<=2): the tapped pronoun awaiting a form
 var roundFinished = false;   // finishWordRound() already scored this entry
 var cleanApplied = false;    // the "it was a typo" button already fixed up the score
+var hintLevel = {};          // typing hint: how many letters are open per field
 var findDone = false;        // conjug step 1 (find the foreign form for the Russian meaning) passed
 var stepMistake = false;     // a wrong pick in step 1 — the word can't be a clean round any more
 var redoKey = null;          // word that was just rolled back: its next appearance is practice only
@@ -1521,6 +1548,7 @@ function nextWord(){
   roundFinished = false;
   cleanApplied = false;
   findDone = false;
+  hintLevel = {};
   stepMistake = false;
   lastUndo = null;
   updateProgressBar();
@@ -1827,14 +1855,17 @@ function renderCard(){
       // she taps "подсказка"/"показать ответ".
       hintBtn.addEventListener("mousedown", function(ev){ ev.preventDefault(); });
       hintBtn.onclick = function(){
-        if(hinted[field] || resolved[field]) return;
+        if(resolved[field] || revealed[field]) return;
         hinted[field] = true;
-        hintBtn.disabled = true;
+        hintLevel[field] = (hintLevel[field]||0) + 1;
+        var step = hintStep(answer, hintLevel[field], state.decks[current.deckId]);
+        if(step.maxed) hintBtn.disabled = true;
         // Same spot "Ответ: ..." uses (reveal-label below the input), not
         // the input's own placeholder - so a hint and a reveal never show
-        // up in two different places on the card.
+        // up in two different places on the card. Each further press opens
+        // one more letter.
         var label = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]');
-        if(label){ label.textContent = "Начинается на: "+hintSeed(answer)+"…"; label.hidden = false; }
+        if(label){ label.textContent = "Подсказка: "+step.text+(step.maxed ? "" : " (ещё буква — «?»)"); label.hidden = false; }
       };
       var revealBtn = cardArea.querySelector('.revealbtn[data-field="'+field+'"]');
       revealBtn.addEventListener("mousedown", function(ev){ ev.preventDefault(); });
@@ -1892,6 +1923,21 @@ function attemptField(field, rawValue, clickedBtn){
      && acceptableSet(stripStress(answer))[normalize(rawValue)] === true){
     ok = true; stressNote = true;
   }
+  // adjectives: the card shows the masculine, but feminine / neuter are fine
+  // too — accepted, with a note saying which gender that was.
+  var genderNote = null;
+  if(!ok && mode==="type"){
+    var gf = genderForms(answer);
+    if(gf){
+      var typed = normalize(rawValue);
+      [["f","женский",gf.f],["n","средний",gf.n]].forEach(function(g){
+        if(ok) return;
+        var exact = normalize(g[2]) === typed;
+        var loose = deckLang(current).looseStress && !hasStress(rawValue) && normalize(stripStress(g[2])) === typed;
+        if(exact || loose){ ok = true; genderNote = {name:g[1], form:g[2], masc:gf.m}; stressNote = false; }
+      });
+    }
+  }
 
   if(!ok){
     // wrong attempt: mark it, give feedback, but let her try again —
@@ -1943,7 +1989,8 @@ function attemptField(field, rawValue, clickedBtn){
     input.disabled = true;
     var lbl = cardArea.querySelector('.reveal-label[data-reveal="'+field+'"]');
     if(lbl) lbl.hidden = true;
-    if(stressNote) setFb(field, "ok", "✓ Верно, но ударение: ", answer);
+    if(genderNote) setFb(field, "ok", "✓ Принято, но это "+genderNote.name+" род: "+genderNote.form+" (мужской: "+genderNote.masc+")");
+    else if(stressNote) setFb(field, "ok", "✓ Верно, но ударение: ", answer);
     else if(revealed[field]) setFb(field, "ok", "✓ Верно (после ошибки или подсказки)");
     else setFb(field, "ok", "✓ Верно");
     focusOtherField(field);

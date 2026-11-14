@@ -254,6 +254,16 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 /* The "?" turns into a replay button once matched: keep it the same 22px,
    or the content-sized label column widens and the whole card shifts. */
 .match-row .speakmini{width:22px;height:22px;}
+
+/* Sorting card: one form, two big group buttons side by side. */
+.pick-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.pick-btn{
+  display:flex;justify-content:center;align-items:baseline;gap:8px;text-align:center;
+  white-space:normal;font-weight:600;padding-block:16px;
+}
+.pick-key{font-size:.75rem;font-weight:400;color:var(--ink-muted);}
+.pick-btn.correct .pick-key, .pick-btn.wrong .pick-key{color:inherit;}
+@media (hover:none){ .pick-key{display:none;} }
 .match-row .speakmini svg{width:11px;height:11px;}
 .match-row .hintbtn:hover{opacity:1;}
 .match-form{font-weight:500;}
@@ -638,7 +648,21 @@ var DEFAULT_DECKS = {
       ["partir",["pars","pars","part","partons","partez","partent"],"уезжать, уходить",
         ["я уезжаю","ты уезжаешь","он уезжает","мы уезжаем","вы уезжаете","они уезжают"]],
       ["recevoir",["reçois","reçois","reçoit","recevons","recevez","reçoivent"],"получать",
-        ["я получаю","ты получаешь","он получает","мы получаем","вы получаете","они получают"]]
+        ["я получаю","ты получаешь","он получает","мы получаем","вы получаете","они получают"]],
+      // Regular models: 1st group (-er: -e/-es/-e/-ons/-ez/-ent) and
+      // 2nd group (-ir: -is/-is/-it/-issons/-issez/-issent).
+      ["parler",["parle","parles","parle","parlons","parlez","parlent"],"говорить, разговаривать",
+        ["я говорю","ты говоришь","он говорит","мы говорим","вы говорите","они говорят"]],
+      ["aimer",["aime","aimes","aime","aimons","aimez","aiment"],"любить, нравиться",
+        ["я люблю","ты любишь","он любит","мы любим","вы любите","они любят"]],
+      ["finir",["finis","finis","finit","finissons","finissez","finissent"],"заканчивать",
+        ["я заканчиваю","ты заканчиваешь","он заканчивает","мы заканчиваем","вы заканчиваете","они заканчивают"]],
+      ["choisir",["choisis","choisis","choisit","choisissons","choisissez","choisissent"],"выбирать",
+        ["я выбираю","ты выбираешь","он выбирает","мы выбираем","вы выбираете","они выбирают"]],
+      ["réussir",["réussis","réussis","réussit","réussissons","réussissez","réussissent"],"удаваться, добиваться успеха",
+        ["я добиваюсь","ты добиваешься","он добивается","мы добиваемся","вы добиваетесь","они добиваются"]],
+      ["grandir",["grandis","grandis","grandit","grandissons","grandissez","grandissent"],"расти",
+        ["я расту","ты растёшь","он растёт","мы растём","вы растёте","они растут"]]
     ]
   },
   "nombres-ch": {
@@ -736,9 +760,33 @@ var DEFAULT_DECKS = {
         ["плохие","хуже","самые плохие"]],
       ["mal",["mal","plus mal","le plus mal"],"плохо (наречие)",
         ["плохо","хуже","хуже всего"]]
-    ]
+    ],
+    // The grouped sorting cards that briefly lived here, superseded by the
+    // one-form-per-card ones appended below.
+    removedWords: ["прилагательное или наречие?","обычная или сравнительная?","хорошее или плохое?"]
   }
 };
+
+// Sorting (GitHub issue #1, part 2), one form per card: each form gets its
+// own spaced-repetition progress (one fact per card), and the shuffled queue
+// interleaves the axes and groups on its own. Each axis trains one
+// confusion. pick word shape: [key, form, [group0, group1], groupIdx, question];
+// the key is the form plus the axis tag, since the same form is on several axes.
+function pickCards(question, tag, groups, forms0, forms1){
+  return forms0.map(function(f){ return [f+" · "+tag, f, groups, 0, question]; })
+    .concat(forms1.map(function(f){ return [f+" · "+tag, f, groups, 1, question]; }));
+}
+DEFAULT_DECKS["comparatifs-chaines"].words = DEFAULT_DECKS["comparatifs-chaines"].words.concat(
+  pickCards("Прилагательное или наречие?", "прил./нареч.", ["Прилагательное","Наречие"],
+    ["bon","bonne","meilleur","meilleure","le meilleur","mauvais","mauvaise","plus mauvais","le plus mauvais"],
+    ["bien","mieux","le mieux","mal","plus mal","le plus mal"]),
+  pickCards("Обычная или сравнительная?", "обычн./сравн.", ["Обычная","Сравнительная"],
+    ["bon","bonne","bien","mauvais","mauvaise","mal"],
+    ["meilleur","meilleure","mieux","plus mauvais","plus mauvaise","plus mal"]),
+  pickCards("Хорошее или плохое?", "хор./плох.", ["Хорошее","Плохое"],
+    ["bon","bien","meilleur","mieux","le meilleur","le mieux"],
+    ["mauvais","mal","plus mauvais","plus mal","le plus mauvais","le plus mal"])
+);
 
 var INTERVALS = {1:0,2:1,3:3,4:7,5:16};
 var BATCH_SIZE = 10;
@@ -833,6 +881,25 @@ function normalizeState(raw){
           delete map[oldK];
         });
         w[0] = newFirst;
+      });
+    });
+    // Retired cards: drop the deck "comparatifs-tri" (briefly its own deck,
+    // never committed) and any word a catalog deck lists in `removedWords`
+    // (by key), together with their progress and today's records.
+    var dropProgress = function(k){
+      [s.progress, s.daily.words, s.daily.cleanWords, s.daily.reviewedErrors].forEach(function(map){ delete map[k]; });
+    };
+    if(s.decks["comparatifs-tri"]){
+      s.decks["comparatifs-tri"].words.forEach(function(w){ dropProgress(deckProgKey("comparatifs-tri", wordKey(w[0]))); });
+      delete s.decks["comparatifs-tri"];
+    }
+    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+      var gone = DEFAULT_DECKS[deckId].removedWords;
+      if(!gone || !s.decks[deckId]) return;
+      s.decks[deckId].words = s.decks[deckId].words.filter(function(w){
+        if(gone.indexOf(wordKey(w[0]))===-1) return true;
+        dropProgress(deckProgKey(deckId, wordKey(w[0])));
+        return false;
       });
     });
     // Backfill new words added to a catalog deck's entry AFTER this user
@@ -1157,6 +1224,12 @@ function speakFR(text, deckId){
 // distractors from the same row.
 function entryProgKey(e){ return deckProgKey(e.deckId, wordKey(e.word[0])); }
 
+// A deck can mix in sorting cards (comparatifs-chaines: chains + sorting).
+// A pick word is recognizable by its shape — word[3] is the right group's
+// index (a number), where every other kind has a string/list or nothing.
+function isPickWord(w){ return typeof w[3]==="number"; }
+function wordKind(deck, w){ return isPickWord(w) ? "pick" : deck.kind; }
+
 function enabledDeckIds(){
   return Object.keys(state.decks).filter(function(id){ return !state.decks[id].disabled; });
 }
@@ -1169,7 +1242,7 @@ function poolEntries(){
   var out = [];
   activeDeckIds().forEach(function(deckId){
     var deck = state.decks[deckId];
-    deck.words.forEach(function(w){ out.push({deckId:deckId, kind:deck.kind, word:w}); });
+    deck.words.forEach(function(w){ out.push({deckId:deckId, kind:wordKind(deck, w), word:w}); });
   });
   return out;
 }
@@ -1269,6 +1342,7 @@ function splitClozeNote(s){
   return m ? {main: m[1], note: m[2]} : {main: s, note: null};
 }
 function promptText(e){
+  if(e.kind==="pick") return e.word[1];
   if(e.kind==="verb") return e.word[2];
   if(e.kind==="number") return e.word[2];
   if(e.kind==="cloze"){
@@ -1288,6 +1362,7 @@ function promptText(e){
 function promptEyebrow(e){
   var deck = state.decks[e.deckId];
   var lang = deckLang(e);
+  if(e.kind==="pick") return e.word[4];
   if(e.kind==="verb") return "Переведи на "+lang.name;
   if(e.kind==="number"){
     var variantNote = (deck && deck.variantNote) || "FR и CH";
@@ -1675,6 +1750,45 @@ function moveFormOpposite(btn, rowIdx){
   });
 }
 
+// ---- pick kind: one form, two group buttons ----
+function renderPickHtml(entry){
+  var keys = ["←","→"];
+  return entry.word[2].map(function(label, i){
+    return '<button type="button" class="choice-btn pick-btn" data-b="'+i+'">'+label+
+      '<span class="pick-key">'+keys[i]+'</span></button>';
+  }).join("");
+}
+function bindPickHandlers(entry){
+  var btns = cardArea.querySelectorAll(".pick-btn");
+  Array.prototype.forEach.call(btns, function(btn){
+    btn.onclick = function(){
+      if(resolved.a || btn.disabled) return;
+      if(Number(btn.dataset.b)!==entry.word[3]){
+        mistaken.a = true;
+        btn.classList.add("wrong");
+        btn.disabled = true;
+        return;
+      }
+      resolved.a = true; correctFlags.a = true;
+      Array.prototype.forEach.call(btns, function(b){ b.disabled = true; });
+      btn.classList.remove("wrong");
+      btn.classList.add("correct");
+      speakFR(entry.word[1], entry.deckId);
+      finishWordRound();
+    };
+  });
+}
+// ←/→ (or 1/2) pick the left/right group.
+document.addEventListener("keydown", function(e){
+  if(!current || current.kind!=="pick" || resolved.a) return;
+  var t = e.target;
+  if(t && t.closest && (t.closest(".overlay") || t.tagName==="INPUT" || t.tagName==="TEXTAREA" || t.tagName==="SELECT")) return;
+  var b = (e.key==="ArrowLeft" || e.key==="1") ? 0 : (e.key==="ArrowRight" || e.key==="2") ? 1 : -1;
+  if(b<0) return;
+  var btn = cardArea.querySelector('.pick-btn[data-b="'+b+'"]');
+  if(btn && !btn.disabled){ e.preventDefault(); btn.click(); }
+});
+
 function bindMatchHandlers(entry){
   Array.prototype.forEach.call(cardArea.querySelectorAll(".match-pronoun"), function(btn){
     btn.onclick = function(){
@@ -1736,20 +1850,24 @@ function renderCard(){
   var fields = requiredFields(current);
   var isMatching = current.kind==="conjug" && box<=2;
   var isConjugType = current.kind==="conjug" && !isMatching;
-  var fieldsHtml = isMatching ? renderMatchHtml(current) : fields.map(function(f){ return fieldBlock(current, f); }).join("");
+  var isPick = current.kind==="pick";
+  var fieldsHtml = isPick ? renderPickHtml(current)
+    : isMatching ? renderMatchHtml(current)
+    : fields.map(function(f){ return fieldBlock(current, f); }).join("");
   var deckName = state.decks[current.deckId].name;
   // At box 5 the translation IS the main prompt (see conjugShowsRussian) —
   // repeating it again here as a hint line would just show it twice.
   var translationLine = current.kind==="cloze"
     ? (state.decks[current.deckId].translationInPrompt ? splitClozeNote(current.word[3]).note : current.word[3])
-    : (current.kind==="conjug" && !conjugShowsRussian(current) ? current.word[2] : null);
+    : (current.kind==="conjug" && !conjugShowsRussian(current)) ? current.word[2]
+    : null;
 
   var html = ''+
     '<div class="eyebrow"><span>'+promptEyebrow(current)+
       (freePractice && !reviewingErrors ? ' · свободно' : '')+'</span><span class="box-dots">'+dots+'</span></div>'+
     '<div class="ruword">'+promptText(current)+'</div>'+
     (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
-    '<div class="'+(isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
+    '<div class="'+(isPick?'pick-row':isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
     '<button type="button" class="btn ghost typo-btn" id="typoBtn" hidden>Это опечатка</button>'+
     (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deckName+'</div>' : '');
   cardArea.innerHTML = html;
@@ -1805,6 +1923,10 @@ function renderCard(){
     }
   };
 
+  if(isPick){
+    bindPickHandlers(current);
+    return;
+  }
   if(isMatching){
     bindMatchHandlers(current);
     return;
@@ -2320,6 +2442,8 @@ function wordRowHtml(e, p, trailingLabel){
     ? '<span class="inf">'+e.word[2]+'</span><span class="sep">—</span>'+(e.word[0]===e.word[1] ? e.word[0] : e.word[0]+' / '+e.word[1])
     : e.kind==="conjug"
     ? '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[2]
+    : e.kind==="pick"
+    ? '<span class="inf">'+e.word[1]+'</span><span class="sep">—</span>'+e.word[2][e.word[3]]
     : '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[1];
   var deckTag = state.activeDeck==="__all__" ? '<span class="deck-chip">'+state.decks[e.deckId].name+'</span>' : '<span></span>';
   var dots = "";
@@ -2560,7 +2684,11 @@ function showDeckForEdit(deckId){
     : deck.kind==="conjug"
     ? "Формат: infinitif;"+conjugFields(deckId).join("|")+";перевод;я…|ты…|он…|мы…|вы…|они… — по одной строке (6 форм через |, в порядке "+conjugFields(deckId).map(function(f){ return conjugLabel(deckId,f); }).join("/")+"; последняя часть с переводом по лицам необязательна — показывается рядом с местоимением на компьютере). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : "Формат: слово;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится.";
+  if(deck.words.some(isPickWord)){
+    editFormatHint.textContent += " Карточки сортировки: ключ;форма;группа 1|группа 2;номер верной группы (1 или 2);вопрос.";
+  }
   editArea.value = deck.words.map(function(w){
+    if(isPickWord(w)) return [w[0], w[1], w[2].join("|"), w[3]+1, w[4]].join(";");
     if(deck.kind==="cloze") return [w[0], w[1], w[2].join("|"), w[3]].join(";");
     if(deck.kind==="conjug") return [w[0], w[1].join("|"), w[2]].join(";") + (w[3] ? ";"+w[3].join("|") : "");
     return w.join(";");
@@ -2601,6 +2729,9 @@ document.getElementById("saveEditBtn").onclick = function(){
   var words = lines.map(function(l){
     var parts = l.split(";").map(function(p){ return p.trim(); });
     if(kind==="verb" || kind==="number") return [parts[0]||"", parts[1]||"", parts[2]||""];
+    if(/^[12]$/.test(parts[3]||"")) return [parts[0]||"", parts[1]||"",
+      (parts[2]||"").split("|").map(function(d){ return d.trim(); }).slice(0, 2),
+      Number(parts[3])-1, parts[4]||""];
     if(kind==="cloze") return [parts[0]||"", parts[1]||"", (parts[2]||"").split("|").map(function(d){ return d.trim(); }).filter(Boolean), parts[3]||""];
     if(kind==="conjug") return parts[3]
       ? [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||"", parts[3].split("|").map(function(d){ return d.trim(); })]

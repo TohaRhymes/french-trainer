@@ -987,7 +987,12 @@ function adoptDeck(deckId){
 var state = null;
 
 // ---- answer matching ----
-function normalize(s){ return s.trim().normalize("NFC").toLowerCase().replace(/\s+/g," "); }
+// Compares typed text with the stored answer on both sides: curly apostrophes
+// (iPhone types ’) equal ', and trailing . ! ? … (even after a space, as in
+// French "Où est… ?") never matter.
+function normalize(s){
+  return s.normalize("NFC").replace(/[’‘ʼ]/g,"'").toLowerCase().replace(/[\s.!?…]+$/,"").replace(/\s+/g," ").trim();
+}
 // Greek stress mark (tonos, U+0301 once decomposed): decks whose lang sets
 // looseStress accept an answer typed without any stress mark, and show the
 // properly stressed form afterwards (see attemptField).
@@ -1071,6 +1076,29 @@ var DEFAULT_CONJUG_PRONOUNS = [
 function conjugPronouns(deckId){
   var deck = state.decks[deckId];
   return (deck && deck.pronouns) || DEFAULT_CONJUG_PRONOUNS;
+}
+// Per-card pronoun display: a pronoun can list `variants` ([{label,say}], e.g.
+// il / elle / on) — one is picked at random each time a card opens so all of
+// them get practised — and `elideLabel`/`elideSay` (je → j') used when the
+// answer starts with a vowel or h.
+var pronounPick = {};
+function pickPronounVariants(e){
+  pronounPick = {};
+  if(!e || e.kind!=="conjug") return;
+  conjugPronouns(e.deckId).forEach(function(p){
+    if(p.variants && p.variants.length) pronounPick[p.field] = p.variants[Math.floor(Math.random()*p.variants.length)];
+  });
+}
+function conjugPron(e, field){
+  var p = conjugPronouns(e.deckId).filter(function(x){ return x.field===field; })[0];
+  if(!p) return {label:field, say:field};
+  var r = pronounPick[field] || p;
+  var out = {label:r.label, say:r.say};
+  if(p.elideLabel){
+    var ans = e.word[1][conjugIdx(e.deckId, field)] || "";
+    if(/^[haeiouyàâéèêëîïôûœ]/i.test(ans)){ out.label = p.elideLabel; out.say = p.elideSay || p.elideLabel.toLowerCase(); }
+  }
+  return out;
 }
 function conjugFields(deckId){ return conjugPronouns(deckId).map(function(p){ return p.field; }); }
 function conjugIdx(deckId, field){ return conjugFields(deckId).indexOf(field); }
@@ -1207,7 +1235,7 @@ function fieldLabel(e, field){
     return e.word[0]===e.word[1] ? mainLabel : (field==="a" ? variantLabel : mainLabel);
   }
   if(e.kind==="cloze") return "Пропуск";
-  if(e.kind==="conjug") return conjugLabel(e.deckId, field);
+  if(e.kind==="conjug") return conjugPron(e, field).label;
   return e.direction==="ru2fr" ? capitalize(deckLang(e).name) : "Русский";
 }
 // Desktop-only: the per-person Russian gloss shown next to the pronoun on a
@@ -1249,7 +1277,10 @@ function frenchAudioFor(e, field){
     var prompt = stripEmoji(e.word[0]);
     return prompt.indexOf("___")!==-1 ? prompt.replace("___", e.word[1]) : e.word[1];
   }
-  if(e.kind==="conjug") return conjugSay(e.deckId, field)+" "+fieldAnswer(e, field);
+  if(e.kind==="conjug"){
+    var sp = conjugPron(e, field).say;
+    return sp ? sp+(/['’]$/.test(sp)?"":" ")+fieldAnswer(e, field) : fieldAnswer(e, field);
+  }
   return e.word[0];
 }
 // At box 5 (the last, most-practiced level) a conjug card shows the Russian
@@ -1292,7 +1323,7 @@ function promptEyebrow(e){
     var tenseText = (deck && deck.conjugTenseText) || "в настоящем времени (présent)";
     return conjugShowsRussian(e)
       ? "Переведи на "+lang.name+" и проспрягай "+tenseText
-      : "Проспрягай "+tenseText;
+      : "Шаг 2 из 2 · проспрягай "+tenseText;
   }
   return e.direction==="ru2fr" ? "Переведи на "+lang.name : "Переведи на русский";
 }
@@ -1538,6 +1569,7 @@ function nextWord(){
     return;
   }
   current = queue.shift();
+  pickPronounVariants(current);
   if(redoKey && entryProgKey(current)===redoKey){ redoKey = null; redoActive = true; freePractice = true; }
   resolved = freshFieldFlags(current);
   correctFlags = freshFieldFlags(current);

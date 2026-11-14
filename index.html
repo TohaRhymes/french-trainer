@@ -1352,6 +1352,8 @@ var roundFinished = false;   // finishWordRound() already scored this entry
 var cleanApplied = false;    // the "it was a typo" button already fixed up the score
 var findDone = false;        // conjug step 1 (find the foreign form for the Russian meaning) passed
 var stepMistake = false;     // a wrong pick in step 1 — the word can't be a clean round any more
+var redoKey = null;          // word that was just rolled back: its next appearance is practice only
+var redoActive = false;      // that unscored repeat is on screen (freePractice is switched on for it)
 var lastUndo = null;         // snapshot for "откатить результат" of the word just scored
 var batchSeen = 0, batchCorrect = 0, batchLearned = 0, batchTotal = 0;
 
@@ -1503,11 +1505,13 @@ function startBatch(){
 }
 
 function nextWord(){
+  if(redoActive){ redoActive = false; freePractice = false; }
   if(queue.length===0){
     renderSummary(true);
     return;
   }
   current = queue.shift();
+  if(redoKey && entryProgKey(current)===redoKey){ redoKey = null; redoActive = true; freePractice = true; }
   resolved = freshFieldFlags(current);
   correctFlags = freshFieldFlags(current);
   hinted = freshFieldFlags(current);
@@ -1672,7 +1676,7 @@ function renderFindStep(){
   shuffle(pool);
   var options = shuffle(pool.slice(0,3).concat([correct]));
   var html = ''+
-    '<div class="eyebrow"><span>Шаг 1 из 2 · найди перевод на '+lang.name+(freePractice?' · свободно':'')+'</span><span class="box-dots">'+dots+'</span></div>'+
+    '<div class="eyebrow"><span>Шаг 1 из 2 · найди перевод на '+lang.name+(freePractice?(redoActive?' · повтор без счёта':' · свободно'):'')+'</span><span class="box-dots">'+dots+'</span></div>'+
     '<div class="ruword">'+current.word[2]+'</div>'+
     '<div class="fields-row"><div class="field"><div class="choices" data-group="find">'+
     options.map(function(opt){
@@ -1718,7 +1722,7 @@ function renderCard(){
     : (current.kind==="conjug" && !conjugShowsRussian(current) ? current.word[2] : null);
 
   var html = ''+
-    '<div class="eyebrow"><span>'+promptEyebrow(current)+(freePractice?' · свободно':'')+'</span><span class="box-dots">'+dots+'</span></div>'+
+    '<div class="eyebrow"><span>'+promptEyebrow(current)+(freePractice?(redoActive?' · повтор без счёта':' · свободно'):'')+'</span><span class="box-dots">'+dots+'</span></div>'+
     '<div class="ruword">'+promptText(current)+'</div>'+
     (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
     '<div class="'+(isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
@@ -2048,8 +2052,7 @@ function finishWordRound(){
     }
   }
 
-  batchSeen++;
-  if(clean) batchCorrect++;
+  if(!redoActive){ batchSeen++; if(clean) batchCorrect++; }
   if(!freePractice){
     var key = entryProgKey(current);
     state.daily.words[key] = true;
@@ -2088,7 +2091,8 @@ function finishWordRound(){
   var banner = document.createElement("div");
   if(freePractice){
     banner.className = "round-banner ok";
-    banner.textContent = clean ? "✓ Всё верно (свободная практика — прогресс не меняется)" : "Были ошибки или подсказки (свободная практика — прогресс не меняется)";
+    var noteTxt = redoActive ? "повтор после отката — не засчитывается" : "свободная практика — прогресс не меняется";
+    banner.textContent = (clean ? "✓ Всё верно (" : "Были ошибки или подсказки (") + noteTxt + ")";
   } else if(clean){
     banner.className = "round-banner ok";
     banner.textContent = "✓ Всё верно, без подсказок — слово идёт дальше";
@@ -2125,6 +2129,7 @@ function undoLastResult(){
   if(u.clean) batchCorrect = Math.max(0, batchCorrect-1);
   if(u.learnedNow) batchLearned = Math.max(0, batchLearned-1);
   lastUndo = null;
+  redoKey = u.key;
   saveState();   // full write: patchState's merge can't remove keys
   queue.unshift(current);
   renderStats();
@@ -2161,6 +2166,7 @@ function applyProgress(clean){
 }
 
 function renderSummary(isFinal){
+  if(redoActive){ redoActive = false; freePractice = false; }
   renderStats();
   var pct = batchSeen ? Math.round((batchCorrect/batchSeen)*100) : 0;
   var title = isFinal ? "На сегодня всё" : "Мини-тренировка пройдена";

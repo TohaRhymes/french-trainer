@@ -946,7 +946,7 @@ function showSaveStatus(err){
 // a small summary (counts per box, last activity, problems) into
 // `summaries/<id>`, which only the owner can read.
 // ---------------------------------------------------------------------------
-var APP_VERSION = "2026-11-15.4";
+var APP_VERSION = "2026-11-15.5";
 function canon(v){
   if(Array.isArray(v)) return "["+v.map(canon).join(",")+"]";
   if(v && typeof v==="object") return "{"+Object.keys(v).sort().map(function(k){ return JSON.stringify(k)+":"+canon(v[k]); }).join(",")+"}";
@@ -1159,6 +1159,11 @@ async function openMembersOverlay(){
     });
     wrap.appendChild(table);
     list.appendChild(wrap);
+    // deck names / word labels for the word-level view: the owner's own decks,
+    // falling back to the shared copies (e.g. an owner account with no decks of its own)
+    var sharedDecks = {};
+    try{ var dsn = await withTimeout(dbNS.collection("decks").get(), 10000); dsn.docs.forEach(function(x){ sharedDecks[x.id] = x.data(); }); }catch(e){}
+    var deckOf = function(id){ return state.decks[id] || sharedDecks[id] || null; };
     // word-level copy of each person's progress
     var copiesSnap = null;
     try{ copiesSnap = await withTimeout(dbNS.collection("copies").get(), 10000); }catch(e){}
@@ -1175,7 +1180,7 @@ async function openMembersOverlay(){
       });
       Object.keys(byDeck).sort().forEach(function(did){
         var h = document.createElement("h4");
-        var dn = state.decks[did] ? state.decks[did].name : did;
+        var dn = deckOf(did) ? deckOf(did).name : did;
         var arr = byDeck[did];
         h.textContent = dn+" — выучено "+arr.filter(function(x){ return x[1].l; }).length+" из "+arr.length;
         det.appendChild(h);
@@ -1185,7 +1190,7 @@ async function openMembersOverlay(){
         ["Слово","Бокс","Повтор"].forEach(function(t){ var th = document.createElement("th"); th.textContent = t; hr.appendChild(th); });
         var tb = t2.createTBody();
         var labelOf = {};
-        if(state.decks[did]) state.decks[did].words.forEach(function(w){ labelOf[wordKey(w[0])] = w[0]; });
+        if(deckOf(did)) deckOf(did).words.forEach(function(w){ labelOf[wordKey(w[0])] = w[0]; });
         arr.sort(function(a,b){ return a[1].b - b[1].b || String(a[1].d).localeCompare(String(b[1].d)); });
         arr.forEach(function(x){
           var r = tb.insertRow();

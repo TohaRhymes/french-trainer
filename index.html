@@ -946,7 +946,7 @@ function showSaveStatus(err){
 // a small summary (counts per box, last activity, problems) into
 // `summaries/<id>`, which only the owner can read.
 // ---------------------------------------------------------------------------
-var APP_VERSION = "2026-11-15.5";
+var APP_VERSION = "2026-11-15.6";
 function canon(v){
   if(Array.isArray(v)) return "["+v.map(canon).join(",")+"]";
   if(v && typeof v==="object") return "{"+Object.keys(v).sort().map(function(k){ return JSON.stringify(k)+":"+canon(v[k]); }).join(",")+"}";
@@ -1080,6 +1080,8 @@ async function writeSummary(){
       summaryLoaded = true;
       var old = await withTimeout(ref.get(), 10000);
       if(old.exists && old.data() && old.data().activity) summaryActivity = JSON.parse(JSON.stringify(old.data().activity));
+      // keep the last-answered time across page reloads
+      if(old.exists && old.data() && !lastAnsweredAt && old.data().lastAnswered) lastAnsweredAt = old.data().lastAnswered;
     }
     await ref.set(buildSummary());
     // full copy of this person's progress (box / due / learned per word), readable only by the owner

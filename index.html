@@ -879,27 +879,35 @@ var amOwner = false;
 // in, hence this helper instead of a hardcoded path string.
 function myStateDocPath(){ return "data/users/"+myUserId+"/state"; }
 
+// A write to the cloud that fails (offline, no rights, server error) used to
+// pass silently — progress looked saved but wasn't. Now a banner says so, and
+// goes away again as soon as a later write succeeds.
+function showSaveStatus(err){
+  var el = document.getElementById("saveWarn");
+  if(!err){ if(el) el.hidden = true; return; }
+  if(!el){
+    el = document.createElement("div");
+    el.id = "saveWarn";
+    el.setAttribute("role", "alert");
+    el.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:200;background:#a3302a;color:#fff;font:600 .88rem/1.4 system-ui,sans-serif;padding:10px max(16px,env(safe-area-inset-left,0px)) calc(10px + env(safe-area-inset-bottom,0px));text-align:center;";
+    document.body.appendChild(el);
+  }
+  el.textContent = "⚠ Прогресс не сохранился. Обратитесь к администратору."
+    + (err && err.message ? " ("+String(err.message).slice(0,120)+")" : "");
+  el.hidden = false;
+}
 function saveState(){
   if(useDb && dbNS && myUserId){
-    dbNS.doc(myStateDocPath()).set(state).catch(function(){});
+    dbNS.doc(myStateDocPath()).set(state).then(function(){ showSaveStatus(null); }, showSaveStatus);
   } else {
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){ showSaveStatus(e); }
   }
 }
-
-// A full set() overwrites the whole document with whatever this tab/device
-// has in memory — fine for a single device, but when another tab or phone
-// saves in between two of this tab's saves, that full overwrite silently
-// reverts anything the other one just wrote (this is how a word could look
-// like it jumped multiple boxes in one day: a stale tab's box got written
-// back on top of a newer one). update() merges only the fields in `patch`,
-// leaving anything touched elsewhere untouched, so use it for the frequent,
-// narrow writes (one word's progress, one day's bookkeeping).
 function patchState(patch){
   if(useDb && dbNS && myUserId){
-    dbNS.doc(myStateDocPath()).update(patch).catch(function(){});
+    dbNS.doc(myStateDocPath()).update(patch).then(function(){ showSaveStatus(null); }, showSaveStatus);
   } else {
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){ showSaveStatus(e); }
   }
 }
 
@@ -2462,7 +2470,8 @@ function populateDeckModeSelect(){
   // A disabled deck is paused from training entirely — not mixed into
   // "Всё вместе" and not individually selectable either — so it drops out
   // of this list until re-enabled from "Доступные наборы".
-  var opts = enabledDeckIds().map(function(id){
+  // sorted by display name (not by internal id), so the list reads in a stable, predictable order
+  var opts = enabledDeckIds().slice().sort(function(x,y){ return state.decks[x].name.localeCompare(state.decks[y].name, "ru"); }).map(function(id){
     return '<option value="'+id+'"'+(state.activeDeck===id?' selected':'')+'>'+state.decks[id].name+'</option>';
   }).join("");
   opts += '<option value="__all__"'+(state.activeDeck==="__all__"?' selected':'')+'>Всё вместе</option>';

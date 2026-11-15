@@ -363,11 +363,13 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   width:100%;max-width:440px;max-height:85vh;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:16px;
 }
 .modal h2{font-size:1.1rem;padding-right:28px;}
-.member-card{border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:.9rem;}
-.member-card h3{margin:0 0 2px;font-size:1rem;}
-.member-card p{margin:0;color:var(--ink-muted);}
-.member-card p.member-warn{color:var(--danger);font-weight:600;}
-.member-card p.member-ok{color:var(--success);font-weight:600;}
+.members-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;}
+.members-table{border-collapse:collapse;width:100%;min-width:640px;font-size:.84rem;}
+.members-table th,.members-table td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);}
+.members-table th{font-size:.7rem;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-muted);}
+.members-table tr:last-child td{border-bottom:0;}
+.members-table td.member-warn{color:var(--danger);font-weight:600;}
+.members-table td.member-ok{color:var(--success);font-weight:600;}
 .modal-close{
   position:absolute;top:16px;right:16px;width:26px;height:26px;border-radius:50%;
   border:1px solid var(--border);background:var(--surface);color:var(--ink-muted);
@@ -460,7 +462,7 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 </div>
 
 <div class="overlay" id="membersOverlay" hidden>
-  <div class="modal" style="max-width:560px;">
+  <div class="modal" style="max-width:860px;">
     <button type="button" class="modal-close" id="closeMembersBtn" title="Закрыть">✕</button>
     <h2>Участники</h2>
     <p class="hint">Сводка без ответов: боксы, выученное, когда занимались и что пошло не так. Обновляется после занятий.</p>
@@ -941,7 +943,7 @@ function showSaveStatus(err){
 // a small summary (counts per box, last activity, problems) into
 // `summaries/<id>`, which only the owner can read.
 // ---------------------------------------------------------------------------
-var APP_VERSION = "2026-11-15.2";
+var APP_VERSION = "2026-11-15.3";
 function canon(v){
   if(Array.isArray(v)) return "["+v.map(canon).join(",")+"]";
   if(v && typeof v==="object") return "{"+Object.keys(v).sort().map(function(k){ return JSON.stringify(k)+":"+canon(v[k]); }).join(",")+"}";
@@ -1115,28 +1117,35 @@ async function openMembersOverlay(){
     var profs = userNSRef && userNSRef.profiles ? await userNSRef.profiles(ids) : {};
     list.textContent = "";
     snap.docs.sort(function(a,b){ return String((b.data()||{}).lastAnswered||"").localeCompare(String((a.data()||{}).lastAnswered||"")); });
+    var wrap = document.createElement("div"); wrap.className = "members-wrap";
+    var table = document.createElement("table"); table.className = "members-table";
+    var head = table.createTHead().insertRow();
+    ["Имя","Почта","Занимался","Выучено","Сегодня","Боксы 1·2·3·4·5","Проблемы"].forEach(function(t){
+      var th = document.createElement("th"); th.textContent = t; head.appendChild(th);
+    });
+    var body = table.createTBody();
     snap.docs.forEach(function(d){
-      var s = d.data() || {}, pr = profs[d.id] || {};
-      var card = document.createElement("div"); card.className = "member-card";
-      var h = document.createElement("h3"); h.textContent = pr.name || "Участник"; card.appendChild(h);
-      var line = function(t, cls){ var p = document.createElement("p"); if(cls) p.className = cls; p.textContent = t; card.appendChild(p); };
-      var b = s.boxes || {};
-      line("Занимался: "+relText(s.lastAnswered)+" · открывал: "+relText(s.lastOpened));
-      line("Выучено "+(s.learned||0)+" из "+(s.total||0)+" · сегодня слов: "+((s.today||{}).words||0)+" (чисто: "+((s.today||{}).clean||0)+")");
-      line("Боксы: 1 — "+(b[1]||0)+" · 2 — "+(b[2]||0)+" · 3 — "+(b[3]||0)+" · 4 — "+(b[4]||0)+" · 5 — "+(b[5]||0));
-      var act = s.activity || {}, days = Object.keys(act).sort().slice(-7);
-      if(days.length) line("Последние дни: "+days.map(function(k){ return k.slice(5)+": "+act[k].words; }).join(" · "));
+      var s = d.data() || {}, pr = profs[d.id] || {}, b = s.boxes || {};
+      var row = body.insertRow();
+      var cell = function(t, cls){ var c = row.insertCell(); c.textContent = t; if(cls) c.className = cls; return c; };
+      cell(pr.name || "Участник");
+      cell(pr.email || "—");
+      cell(relText(s.lastAnswered));
+      cell((s.learned||0)+" / "+(s.total||0));
+      cell(((s.today||{}).words||0)+" ("+((s.today||{}).clean||0)+" чисто)");
+      cell([1,2,3,4,5].map(function(k){ return b[k]||0; }).join(" · "));
       var problems = [];
       var idle = relDays(s.lastAnswered || s.lastOpened);
       if(idle!==null && idle>=3) problems.push("не занимался "+idle+" дн.");
-      if(!s.lastAnswered) problems.push("ещё не отвечал ни на одно слово");
+      if(!s.lastAnswered) problems.push("ещё не отвечал");
       var hh = s.health || {};
-      if(hh.saveErrors && hh.lastSaveError && relDays(hh.lastSaveError.at)<=3) problems.push("ошибок сохранения: "+hh.saveErrors+(hh.lastSaveError ? " (последняя "+relText(hh.lastSaveError.at)+": "+hh.lastSaveError.msg+")" : ""));
-      if(hh.lastJsError) problems.push("ошибка в странице "+relText(hh.lastJsError.at)+": "+hh.lastJsError.msg);
-      if(s.appVersion && s.appVersion!==APP_VERSION) problems.push("версия страницы "+s.appVersion+" (актуальная "+APP_VERSION+") — нужно обновить страницу");
-      if(problems.length) line("⚠ "+problems.join("; "), "member-warn"); else line("✓ Всё в порядке", "member-ok");
-      list.appendChild(card);
+      if(hh.saveErrors && hh.lastSaveError && relDays(hh.lastSaveError.at)<=3) problems.push("ошибки сохранения: "+hh.saveErrors+" ("+relText(hh.lastSaveError.at)+": "+hh.lastSaveError.msg+")");
+      if(hh.lastJsError && relDays(hh.lastJsError.at)<=3) problems.push("ошибка страницы "+relText(hh.lastJsError.at)+": "+hh.lastJsError.msg);
+      if(s.appVersion && s.appVersion!==APP_VERSION) problems.push("старая версия страницы ("+s.appVersion+")");
+      cell(problems.length ? "⚠ "+problems.join("; ") : "✓ всё в порядке", problems.length ? "member-warn" : "member-ok");
     });
+    wrap.appendChild(table);
+    list.appendChild(wrap);
   }catch(e){
     list.textContent = "Не удалось прочитать сводки: "+(e && e.message ? e.message : e);
   }

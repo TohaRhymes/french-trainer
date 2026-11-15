@@ -363,6 +363,9 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   width:100%;max-width:440px;max-height:85vh;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:16px;
 }
 .modal h2{font-size:1.1rem;padding-right:28px;}
+.member-det{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;}
+.member-det summary{cursor:pointer;font-weight:600;}
+.member-det h4{margin:12px 0 6px;font-size:.9rem;}
 .members-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;}
 .members-table{border-collapse:collapse;width:100%;min-width:640px;font-size:.84rem;}
 .members-table th,.members-table td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);}
@@ -943,7 +946,7 @@ function showSaveStatus(err){
 // a small summary (counts per box, last activity, problems) into
 // `summaries/<id>`, which only the owner can read.
 // ---------------------------------------------------------------------------
-var APP_VERSION = "2026-11-15.3";
+var APP_VERSION = "2026-11-15.4";
 function canon(v){
   if(Array.isArray(v)) return "["+v.map(canon).join(",")+"]";
   if(v && typeof v==="object") return "{"+Object.keys(v).sort().map(function(k){ return JSON.stringify(k)+":"+canon(v[k]); }).join(",")+"}";
@@ -1079,6 +1082,16 @@ async function writeSummary(){
       if(old.exists && old.data() && old.data().activity) summaryActivity = JSON.parse(JSON.stringify(old.data().activity));
     }
     await ref.set(buildSummary());
+    // full copy of this person's progress (box / due / learned per word), readable only by the owner
+    var prog = {};
+    Object.keys(state.decks).forEach(function(id){
+      state.decks[id].words.forEach(function(w){
+        var k = deckProgKey(id, wordKey(w[0])), p = state.progress[k];
+        if(p) prog[k] = {b: p.box, d: p.due, l: p.learned ? 1 : 0};
+      });
+    });
+    await dbNS.doc("copies/"+myUserId).set({v:1, updatedAt: new Date().toISOString(), progress: prog,
+      daily: {date: state.daily.date, words: Object.keys(state.daily.words||{}).length, clean: Object.keys(state.daily.cleanWords||{}).length}});
   }catch(e){ /* a failed summary must never disturb training */ }
 }
 function scheduleSummary(delay){
@@ -1146,6 +1159,44 @@ async function openMembersOverlay(){
     });
     wrap.appendChild(table);
     list.appendChild(wrap);
+    // word-level copy of each person's progress
+    var copiesSnap = null;
+    try{ copiesSnap = await withTimeout(dbNS.collection("copies").get(), 10000); }catch(e){}
+    if(copiesSnap) copiesSnap.docs.forEach(function(cd){
+      var c = cd.data() || {}, pr2 = profs[cd.id] || {};
+      var det = document.createElement("details"); det.className = "member-det";
+      var sm = document.createElement("summary");
+      sm.textContent = "Прогресс по словам — "+(pr2.name || "Участник")+" (обновлено "+relText(c.updatedAt)+")";
+      det.appendChild(sm);
+      var byDeck = {};
+      Object.keys(c.progress || {}).forEach(function(k){
+        var i = k.indexOf("::"), did = k.slice(0,i), wk = k.slice(i+2);
+        (byDeck[did] = byDeck[did] || []).push([wk, c.progress[k]]);
+      });
+      Object.keys(byDeck).sort().forEach(function(did){
+        var h = document.createElement("h4");
+        var dn = state.decks[did] ? state.decks[did].name : did;
+        var arr = byDeck[did];
+        h.textContent = dn+" — выучено "+arr.filter(function(x){ return x[1].l; }).length+" из "+arr.length;
+        det.appendChild(h);
+        var w2 = document.createElement("div"); w2.className = "members-wrap";
+        var t2 = document.createElement("table"); t2.className = "members-table";
+        var hr = t2.createTHead().insertRow();
+        ["Слово","Бокс","Повтор"].forEach(function(t){ var th = document.createElement("th"); th.textContent = t; hr.appendChild(th); });
+        var tb = t2.createTBody();
+        var labelOf = {};
+        if(state.decks[did]) state.decks[did].words.forEach(function(w){ labelOf[wordKey(w[0])] = w[0]; });
+        arr.sort(function(a,b){ return a[1].b - b[1].b || String(a[1].d).localeCompare(String(b[1].d)); });
+        arr.forEach(function(x){
+          var r = tb.insertRow();
+          r.insertCell().textContent = labelOf[x[0]] || x[0];
+          r.insertCell().textContent = x[1].b + (x[1].l ? " ✓" : "");
+          r.insertCell().textContent = x[1].d;
+        });
+        w2.appendChild(t2); det.appendChild(w2);
+      });
+      list.appendChild(det);
+    });
   }catch(e){
     list.textContent = "Не удалось прочитать сводки: "+(e && e.message ? e.message : e);
   }
@@ -2750,7 +2801,7 @@ function renderSummary(isFinal){
 function updateFooterNote(){
   var f = document.getElementById("footerNote");
   if(!amOwner && useDb){
-    f.textContent = "Владелец видит сводку: сколько слов в каких боксах и когда ты занималась. Сами ответы ему не видны.";
+    f.textContent = "Владелец видит твой прогресс по каждому слову (бокс и дату повтора) и когда ты занималась. Сами ответы ему не видны.";
     f.hidden = false;
   } else f.hidden = true;
 }

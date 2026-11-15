@@ -363,6 +363,11 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   width:100%;max-width:440px;max-height:85vh;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:16px;
 }
 .modal h2{font-size:1.1rem;padding-right:28px;}
+.member-card{border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:.9rem;}
+.member-card h3{margin:0 0 2px;font-size:1rem;}
+.member-card p{margin:0;color:var(--ink-muted);}
+.member-card p.member-warn{color:var(--danger);font-weight:600;}
+.member-card p.member-ok{color:var(--success);font-weight:600;}
 .modal-close{
   position:absolute;top:16px;right:16px;width:26px;height:26px;border-radius:50%;
   border:1px solid var(--border);background:var(--surface);color:var(--ink-muted);
@@ -416,6 +421,9 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
         <button class="iconbtn" id="catalogBtn" title="Доступные наборы" aria-label="Доступные наборы">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         </button>
+        <button class="iconbtn" id="membersBtn" title="Участники" aria-label="Участники" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2a3 3 0 010 5.6M18 14.3c1.8.8 3 2.5 3 4.7"/></svg>
+        </button>
         <button class="iconbtn" id="errorsTopBtn" title="Повторить ошибки" aria-label="Повторить ошибки" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><circle cx="12" cy="16.3" r="0.6" fill="currentColor" stroke="none"/></svg>
         </button>
@@ -448,6 +456,16 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
     <h2 id="statsTitle">Статистика по словам</h2>
     <div class="stats" id="statsSummary"></div>
     <div class="stats-list" id="statsTable"></div>
+  </div>
+</div>
+
+<div class="overlay" id="membersOverlay" hidden>
+  <div class="modal" style="max-width:560px;">
+    <button type="button" class="modal-close" id="closeMembersBtn" title="Закрыть">✕</button>
+    <h2>Участники</h2>
+    <p class="hint">Сводка без ответов: боксы, выученное, когда занимались и что пошло не так. Обновляется после занятий.</p>
+    <div id="membersList"></div>
+    <div class="row"><button class="btn ghost" id="reloadMembersBtn">Обновить</button></div>
   </div>
 </div>
 
@@ -887,6 +905,7 @@ var myUserId = null;
 // (see availableDeckIds()). Defaults to false, so an anonymous viewer or
 // one the `user` capability can't identify never sees the private decks.
 var amOwner = false;
+var userNSRef = null;
 
 // The "me" alias in "data/users/me/..." is a convenience only the ArtifactData
 // admin tool understands (for inspecting a user's own sandbox); the page's
@@ -899,8 +918,9 @@ function myStateDocPath(){ return "data/users/"+myUserId+"/state"; }
 // pass silently — progress looked saved but wasn't. Now a banner says so, and
 // goes away again as soon as a later write succeeds.
 function showSaveStatus(err){
+  if(err) noteHealth("saveError", err);
   var el = document.getElementById("saveWarn");
-  if(!err){ if(el) el.hidden = true; return; }
+  if(!err){ if(el) el.hidden = true; document.body.style.paddingBottom = ""; return; }
   if(!el){
     el = document.createElement("div");
     el.id = "saveWarn";
@@ -911,8 +931,218 @@ function showSaveStatus(err){
   el.textContent = "⚠ Прогресс не сохранился. Обратитесь к администратору."
     + (err && err.message ? " ("+String(err.message).slice(0,120)+")" : "");
   el.hidden = false;
+  document.body.style.paddingBottom = (el.offsetHeight+8)+"px";
+}
+
+// ---------------------------------------------------------------------------
+// Sharing: Greek decks are mirrored by the owner into the shared `decks`
+// collection; anyone else (e.g. the owner's mother) gets those decks pulled into
+// their own state on load, with their own progress. Each non-owner also writes
+// a small summary (counts per box, last activity, problems) into
+// `summaries/<id>`, which only the owner can read.
+// ---------------------------------------------------------------------------
+var APP_VERSION = "2026-11-15.2";
+function canon(v){
+  if(Array.isArray(v)) return "["+v.map(canon).join(",")+"]";
+  if(v && typeof v==="object") return "{"+Object.keys(v).sort().map(function(k){ return JSON.stringify(k)+":"+canon(v[k]); }).join(",")+"}";
+  return JSON.stringify(v);
+}
+// A deck is shared when it is Greek (lang el*) or explicitly flagged.
+function isSharedDeck(deck){
+  return !!(deck && !deck.fromShared && (deck.shared===true || (deck.lang && /^el/i.test(deck.lang.code||""))));
+}
+function deckPayload(deck){
+  var o = JSON.parse(JSON.stringify(deck));
+  delete o.disabled; delete o.fromShared;
+  return o;
+}
+function withTimeout(promise, ms){
+  return new Promise(function(resolve, reject){
+    var t = setTimeout(function(){ reject(new Error("таймаут чтения")); }, ms);
+    promise.then(function(v){ clearTimeout(t); resolve(v); }, function(e){ clearTimeout(t); reject(e); });
+  });
+}
+
+// owner side: copy shared decks out whenever they differ from what's stored
+var mirrorCache = null, mirrorTimer = null, mirrorBusy = false;
+async function mirrorSharedDecks(){
+  if(!amOwner || !useDb || !dbNS || !state || mirrorBusy) return;
+  mirrorBusy = true;
+  try{
+    if(mirrorCache===null){
+      mirrorCache = {};
+      var snap = await withTimeout(dbNS.collection("decks").get(), 10000);
+      snap.docs.forEach(function(d){ mirrorCache[d.id] = canon(d.data()); });
+    }
+    var ids = Object.keys(state.decks).filter(function(id){ return isSharedDeck(state.decks[id]); });
+    for(var i=0;i<ids.length;i++){
+      var body = deckPayload(state.decks[ids[i]]), c = canon(body);
+      if(mirrorCache[ids[i]]===c) continue;
+      await dbNS.doc("decks/"+ids[i]).set(body);
+      mirrorCache[ids[i]] = c;
+    }
+  }catch(e){ mirrorCache = null; }
+  mirrorBusy = false;
+}
+function scheduleMirror(){
+  if(!amOwner) return;
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(mirrorSharedDecks, 2500);
+}
+
+// everyone else: pull the shared decks into my own state. Returns true when
+// my state changed (the caller then saves it).
+async function pullSharedDecks(st){
+  if(amOwner || !useDb || !dbNS) return false;
+  var snap = await withTimeout(dbNS.collection("decks").get(), 10000);
+  var changed = false, hadDecks = Object.keys(st.decks).length>0;
+  snap.docs.forEach(function(d){
+    var src = d.data();
+    if(!src || !src.words) return;
+    var body = JSON.parse(JSON.stringify(src));
+    var cur = st.decks[d.id], isNew = !cur;
+    if(cur){
+      if(canon(deckPayload(cur))!==canon(body)) changed = true;
+      if(cur.disabled) body.disabled = true;
+    } else changed = true;
+    body.fromShared = true;
+    st.decks[d.id] = body;
+    // a deck that shows up after the user already had others starts tomorrow,
+    // so a new deck doesn't flood today's queue
+    var off = (isNew && hadDecks) ? 1 : 0;
+    body.words.forEach(function(w){
+      var key = deckProgKey(d.id, wordKey(w[0]));
+      if(!st.progress[key]){
+        st.progress[key] = {box:1, due: off ? addDays(todayStr(), off) : todayStr(), learned:false};
+        changed = true;
+      }
+    });
+  });
+  return changed;
+}
+
+// health notes (save failures, script errors) are kept locally and included in
+// the next summary, so the owner sees them even if they happened offline
+var HEALTH_KEY = "emlekHealth";
+var health = {saveErrors:0, lastSaveError:null, lastJsError:null};
+try{ var hraw = localStorage.getItem(HEALTH_KEY); if(hraw) health = JSON.parse(hraw); }catch(e){}
+function noteHealth(kind, err){
+  var msg = String(err && err.message ? err.message : err).slice(0,160);
+  var entry = {at: new Date().toISOString(), msg: msg};
+  if(kind==="saveError"){ health.saveErrors = (health.saveErrors||0)+1; health.lastSaveError = entry; }
+  else health.lastJsError = entry;
+  try{ localStorage.setItem(HEALTH_KEY, JSON.stringify(health)); }catch(e){}
+}
+window.addEventListener("error", function(ev){ noteHealth("jsError", (ev && ev.message) || "ошибка скрипта"); });
+
+var summaryTimer = null, summaryActivity = null, summaryLoaded = false, lastAnsweredAt = null, openedAt = new Date().toISOString();
+function buildSummary(){
+  var boxes = {1:0,2:0,3:0,4:0,5:0}, learned = 0, total = 0, perDeck = {};
+  Object.keys(state.decks).forEach(function(id){
+    var d = state.decks[id], pd = {total:0, learned:0, boxes:[0,0,0,0,0]};
+    d.words.forEach(function(w){
+      var p = state.progress[deckProgKey(id, wordKey(w[0]))];
+      if(!p) return;
+      pd.total++; pd.boxes[Math.min(5,Math.max(1,p.box))-1]++;
+      if(p.learned) pd.learned++;
+    });
+    pd.boxes.forEach(function(n,i){ boxes[i+1] += n; });
+    learned += pd.learned; total += pd.total;
+    perDeck[id] = pd;
+  });
+  var today = todayStr();
+  var words = Object.keys(state.daily.words||{}).length, clean = Object.keys(state.daily.cleanWords||{}).length;
+  summaryActivity = summaryActivity || {};
+  summaryActivity[today] = {words: words, clean: clean};
+  var keep = Object.keys(summaryActivity).sort().slice(-21), act = {};
+  keep.forEach(function(k){ act[k] = summaryActivity[k]; });
+  summaryActivity = act;
+  return {
+    v: 1, appVersion: APP_VERSION, updatedAt: new Date().toISOString(),
+    lastOpened: openedAt, lastAnswered: lastAnsweredAt,
+    total: total, learned: learned, boxes: boxes, decks: perDeck,
+    today: {date: today, words: words, clean: clean}, activity: act,
+    health: {saveErrors: health.saveErrors||0, lastSaveError: health.lastSaveError||null, lastJsError: health.lastJsError||null},
+    mobile: /Mobi|Android|iPhone/i.test(navigator.userAgent||"")
+  };
+}
+async function writeSummary(){
+  summaryTimer = null;
+  if(amOwner || !useDb || !dbNS || !myUserId || !state) return;
+  try{
+    var ref = dbNS.doc("summaries/"+myUserId);
+    if(!summaryLoaded){
+      summaryLoaded = true;
+      var old = await withTimeout(ref.get(), 10000);
+      if(old.exists && old.data() && old.data().activity) summaryActivity = JSON.parse(JSON.stringify(old.data().activity));
+    }
+    await ref.set(buildSummary());
+  }catch(e){ /* a failed summary must never disturb training */ }
+}
+function scheduleSummary(delay){
+  if(amOwner || !useDb) return;
+  clearTimeout(summaryTimer);
+  summaryTimer = setTimeout(writeSummary, delay===undefined ? 10000 : delay);
+}
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState==="hidden" && summaryTimer){ clearTimeout(summaryTimer); writeSummary(); }
+});
+
+// owner screen: who uses the app and how it is going
+function relDays(iso){
+  if(!iso) return null;
+  var ms = Date.now() - new Date(iso).getTime();
+  return Math.floor(ms/86400000);
+}
+function relText(iso){
+  var d = relDays(iso);
+  if(d===null) return "ещё не занимался";
+  if(d<=0){
+    var h = Math.floor((Date.now()-new Date(iso).getTime())/3600000);
+    return h<1 ? "только что" : h+" ч назад";
+  }
+  return d+" дн. назад";
+}
+async function openMembersOverlay(){
+  var ov = document.getElementById("membersOverlay");
+  var list = document.getElementById("membersList");
+  list.textContent = "Загрузка…";
+  ov.hidden = false;
+  try{
+    var snap = await withTimeout(dbNS.collection("summaries").get(), 10000);
+    if(snap.empty){ list.textContent = "Пока никто не занимался."; return; }
+    var ids = snap.docs.map(function(d){ return d.id; });
+    var profs = userNSRef && userNSRef.profiles ? await userNSRef.profiles(ids) : {};
+    list.textContent = "";
+    snap.docs.sort(function(a,b){ return String((b.data()||{}).lastAnswered||"").localeCompare(String((a.data()||{}).lastAnswered||"")); });
+    snap.docs.forEach(function(d){
+      var s = d.data() || {}, pr = profs[d.id] || {};
+      var card = document.createElement("div"); card.className = "member-card";
+      var h = document.createElement("h3"); h.textContent = pr.name || "Участник"; card.appendChild(h);
+      var line = function(t, cls){ var p = document.createElement("p"); if(cls) p.className = cls; p.textContent = t; card.appendChild(p); };
+      var b = s.boxes || {};
+      line("Занимался: "+relText(s.lastAnswered)+" · открывал: "+relText(s.lastOpened));
+      line("Выучено "+(s.learned||0)+" из "+(s.total||0)+" · сегодня слов: "+((s.today||{}).words||0)+" (чисто: "+((s.today||{}).clean||0)+")");
+      line("Боксы: 1 — "+(b[1]||0)+" · 2 — "+(b[2]||0)+" · 3 — "+(b[3]||0)+" · 4 — "+(b[4]||0)+" · 5 — "+(b[5]||0));
+      var act = s.activity || {}, days = Object.keys(act).sort().slice(-7);
+      if(days.length) line("Последние дни: "+days.map(function(k){ return k.slice(5)+": "+act[k].words; }).join(" · "));
+      var problems = [];
+      var idle = relDays(s.lastAnswered || s.lastOpened);
+      if(idle!==null && idle>=3) problems.push("не занимался "+idle+" дн.");
+      if(!s.lastAnswered) problems.push("ещё не отвечал ни на одно слово");
+      var hh = s.health || {};
+      if(hh.saveErrors && hh.lastSaveError && relDays(hh.lastSaveError.at)<=3) problems.push("ошибок сохранения: "+hh.saveErrors+(hh.lastSaveError ? " (последняя "+relText(hh.lastSaveError.at)+": "+hh.lastSaveError.msg+")" : ""));
+      if(hh.lastJsError) problems.push("ошибка в странице "+relText(hh.lastJsError.at)+": "+hh.lastJsError.msg);
+      if(s.appVersion && s.appVersion!==APP_VERSION) problems.push("версия страницы "+s.appVersion+" (актуальная "+APP_VERSION+") — нужно обновить страницу");
+      if(problems.length) line("⚠ "+problems.join("; "), "member-warn"); else line("✓ Всё в порядке", "member-ok");
+      list.appendChild(card);
+    });
+  }catch(e){
+    list.textContent = "Не удалось прочитать сводки: "+(e && e.message ? e.message : e);
+  }
 }
 function saveState(){
+  scheduleMirror();
   if(useDb && dbNS && myUserId){
     dbNS.doc(myStateDocPath()).set(state).then(function(){ showSaveStatus(null); }, showSaveStatus);
   } else {
@@ -946,8 +1176,9 @@ async function loadStateAsync(){
   var uid = "";
   try{
     var userNS = (typeof claude !== "undefined" && claude.use) ? await claude.use("user") : null;
+    userNSRef = userNS;
     if(userNS && userNS.id) uid = await userNS.id();
-    amOwner = !!(userNS && userNS.isOwner && userNS.isOwner());
+    amOwner = !!(userNS && userNS.isOwner && await userNS.isOwner());
   }catch(e){}
   myUserId = uid || null;
   if(uid) dbDiag += (dbDiag ? ", " : "") + "id "+uid.slice(0,10);
@@ -1541,7 +1772,10 @@ function glossFor(entry, field, opt){
     if(!hit) for(i=0;i<words.length && !hit;i++){
       if(words[i][1].some(function(f){ return normalize(f||"")===n; })) hit = words[i];
     }
-    return hit ? hit[0]+" — "+hit[2] : "";
+    if(!hit) return "";
+    var slot = hit[1].map(function(f){ return normalize(f||""); }).indexOf(n);
+    var suffix = (hit===entry.word && slot>=0 && slot!==idx) ? " ("+conjugLabel(entry.deckId, conjugFields(entry.deckId)[slot])+")" : "";
+    return hit[0]+" — "+hit[2]+suffix;
   }
   for(i=0;i<words.length;i++){
     w = words[i];
@@ -2269,6 +2503,8 @@ function finishWordRound(){
     }
   }
 
+  lastAnsweredAt = new Date().toISOString();
+  scheduleSummary();
   if(!redoActive){ batchSeen++; if(clean) batchCorrect++; }
   if(!freePractice){
     var key = entryProgKey(current);
@@ -2503,7 +2739,11 @@ function renderSummary(isFinal){
 }
 
 function updateFooterNote(){
-  document.getElementById("footerNote").hidden = true;
+  var f = document.getElementById("footerNote");
+  if(!amOwner && useDb){
+    f.textContent = "Владелец видит сводку: сколько слов в каких боксах и когда ты занималась. Сами ответы ему не видны.";
+    f.hidden = false;
+  } else f.hidden = true;
 }
 
 function startSession(){
@@ -2815,7 +3055,7 @@ var editDeckBody = document.getElementById("editDeckBody");
 var editFormatHint = document.getElementById("editFormatHint");
 
 function populateEditDeckSelect(selectId){
-  var opts = Object.keys(state.decks).map(function(id){
+  var opts = Object.keys(state.decks).filter(function(id){ return amOwner || !state.decks[id].fromShared; }).map(function(id){
     return '<option value="'+id+'">'+state.decks[id].name+'</option>';
   }).join("");
   opts += '<option value="__new__">+ Новый набор</option>';
@@ -2943,10 +3183,22 @@ document.getElementById("deleteDeckBtn").onclick = function(e){
   startSession();
 };
 
-loadStateAsync().then(function(loaded){
+document.getElementById("closeMembersBtn").onclick = function(){ document.getElementById("membersOverlay").hidden = true; };
+document.getElementById("reloadMembersBtn").onclick = openMembersOverlay;
+document.getElementById("membersBtn").onclick = openMembersOverlay;
+loadStateAsync().then(async function(loaded){
   state = loaded;
+  // shared Greek decks: pulled in for everyone but the owner (who is the source)
+  try{
+    if(await pullSharedDecks(state)) saveState();
+  }catch(e){ /* no shared decks reachable: carry on with what we have */ }
+  if(amOwner && useDb){
+    document.getElementById("membersBtn").hidden = false;
+    scheduleMirror();
+  }
   populateDeckModeSelect();
   startSession();
+  scheduleSummary(3000);
 });
 })();
 </script>

@@ -227,6 +227,13 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .choice-btn.correct{background:var(--success-bg);border-color:var(--success);color:var(--success);font-weight:600;}
 .choice-btn.wrong{background:var(--danger-bg);border-color:var(--danger);color:var(--danger);}
 .choice-btn.removed{opacity:.35;text-decoration:line-through;}
+/* translation under an option: shown on the option she tapped wrong, and on
+   every option once the field is answered (class gl-on, text in data-gl) */
+.choice-btn.gl-on[data-gl]:not([data-gl=""])::after{content:attr(data-gl);display:block;font-size:.95rem;font-weight:500;opacity:.92;margin-top:3px;}
+.conjug-grid .choices{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.conjug-grid .choice-btn{padding:8px 10px;font-size:.88rem;}
+.explain{margin-top:12px;padding:10px 12px;border-radius:9px;background:var(--surface);border:1px solid var(--border);font-size:.88rem;line-height:1.45;color:var(--ink);white-space:pre-line;}
+.explain b{color:var(--accent-2);}
 .choice-btn:disabled{cursor:default;}
 .choice-btn.selected{border-color:var(--accent-2);box-shadow:0 0 0 2px var(--accent-2) inset;}
 
@@ -1474,7 +1481,57 @@ function distractorScore(correct, candidate, re){
   return startSimilarity(c, d)*100 + endingSimilarity(c, d);
 }
 
+// Translation of one multiple-choice option (looked up in the deck), shown
+// under the button after a tap. Cloze options are bare grammar words with no
+// translation of their own — the card's explanation covers those.
+function glossFor(entry, field, opt){
+  if(entry.kind==="cloze") return "";
+  var words = state.decks[entry.deckId].words, n = normalize(opt), i, w, v;
+  if(entry.kind==="conjug"){
+    var idx = conjugIdx(entry.deckId, field), hit = null;
+    for(i=0;i<words.length;i++){ if(normalize(words[i][1][idx]||"")===n){ hit = words[i]; break; } }
+    if(!hit) for(i=0;i<words.length && !hit;i++){
+      if(words[i][1].some(function(f){ return normalize(f||"")===n; })) hit = words[i];
+    }
+    return hit ? hit[0]+" — "+hit[2] : "";
+  }
+  for(i=0;i<words.length;i++){
+    w = words[i];
+    if(entry.kind==="verb" || entry.kind==="number"){
+      v = field==="a" ? w[0] : w[1];
+      if(normalize(v)===n) return entry.kind==="number" ? String(w[2]||"") : String(field==="a" ? w[1] : w[0]);
+    } else {
+      v = entry.direction==="ru2fr" ? w[0] : w[1];
+      if(normalize(v)===n) return String(entry.direction==="ru2fr" ? w[1] : w[0]);
+    }
+  }
+  return "";
+}
+function attrEsc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function explainFor(entry){
+  var deck = state.decks[entry.deckId];
+  return (deck.explain && deck.explain[wordKey(entry.word[0])]) || deck.explainDefault || "";
+}
+
 function distractorsFor(entry, field, correctAnswer){
+  if(entry.kind==="conjug"){
+    // similar forms: the same slot (person / tense) of other verbs, plus the
+    // other forms of this very verb — the ones she is most likely to mix up.
+    var idx = conjugIdx(entry.deckId, field), cn = normalize(correctAnswer), seenC = {}, cc = [];
+    state.decks[entry.deckId].words.forEach(function(w){
+      (w[1]||[]).forEach(function(f, j){
+        if(!f) return;
+        var n = normalize(f);
+        if(n===cn || seenC[n]) return;
+        if(w!==entry.word && j!==idx) return;
+        seenC[n] = true; cc.push(f);
+      });
+    });
+    cc.sort(function(a,b){ return distractorScore(correctAnswer,b,null) - distractorScore(correctAnswer,a,null); });
+    var poolC = cc.slice(0, Math.min(8, cc.length));
+    shuffle(poolC);
+    return poolC.slice(0,3);
+  }
   if(entry.kind==="cloze"){
     var picked = entry.word[2].slice();
     shuffle(picked);
@@ -1606,7 +1663,7 @@ function fieldBlock(entry, field){
     var options = shuffle(distractorsFor(entry, field, answer).concat([answer]));
     html += '<div class="choices" data-group="'+field+'">';
     options.forEach(function(opt, idx){
-      html += '<button type="button" class="choice-btn" data-field="'+field+'" data-val="'+idx+'" title="'+opt.replace(/"/g,"&quot;")+'">'+opt+'</button>';
+      html += '<button type="button" class="choice-btn" data-field="'+field+'" data-val="'+idx+'" data-gl="'+attrEsc(glossFor(entry, field, opt))+'" title="'+opt.replace(/"/g,"&quot;")+'">'+opt+'</button>';
     });
     html += '</div>';
   } else {
@@ -1740,7 +1797,8 @@ function renderFindStep(){
     '<div class="ruword">'+current.word[2]+'</div>'+
     '<div class="fields-row"><div class="field"><div class="choices" data-group="find">'+
     options.map(function(opt){
-      return '<button type="button" class="choice-btn" data-val="'+opt.replace(/"/g,"&quot;")+'">'+opt+'</button>';
+      var fw = deck.words.filter(function(w){ return normalize(w[0])===normalize(opt); })[0];
+      return '<button type="button" class="choice-btn" data-val="'+attrEsc(opt)+'" data-gl="'+attrEsc(fw ? fw[2] : "")+'">'+opt+'</button>';
     }).join("")+
     '</div><div class="fb" data-fb="find" role="status" hidden></div></div></div>'+
     (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deck.name+'</div>' : '');
@@ -1750,7 +1808,7 @@ function renderFindStep(){
       if(findDone) return;
       if(normalize(btn.dataset.val)===normalize(correct)){
         findDone = true;
-        Array.prototype.forEach.call(cardArea.querySelectorAll(".choice-btn"), function(b){ b.disabled = true; });
+        Array.prototype.forEach.call(cardArea.querySelectorAll(".choice-btn"), function(b){ b.disabled = true; b.classList.add("gl-on"); });
         btn.classList.remove("wrong"); btn.classList.add("correct");
         setFb("find", "ok", "✓ Верно — теперь формы");
         speakFR(correct, current.deckId);
@@ -1758,7 +1816,7 @@ function renderFindStep(){
         setTimeout(function(){ if(current===shown) renderCard(); }, 800);
       } else {
         stepMistake = true;
-        btn.classList.add("wrong"); btn.disabled = true;
+        btn.classList.add("wrong"); btn.classList.add("gl-on"); btn.disabled = true;
         setFb("find", "bad", "✗ Неверно — выбери другой вариант");
       }
     };
@@ -1771,7 +1829,7 @@ function renderCard(){
   var dots = "";
   for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=box?' on':'')+'"></span>'; }
   var fields = requiredFields(current);
-  var isMatching = current.kind==="conjug" && box<=2;
+  var isMatching = current.kind==="conjug" && box<=2 && state.decks[current.deckId].matching===true;
   var isConjugType = current.kind==="conjug" && !isMatching;
   var fieldsHtml = isMatching ? renderMatchHtml(current) : fields.map(function(f){ return fieldBlock(current, f); }).join("");
   var deckName = state.decks[current.deckId].name;
@@ -1982,6 +2040,7 @@ function attemptField(field, rawValue, clickedBtn){
     mistaken[field] = true;
     if(mode==="choice" && clickedBtn){
       clickedBtn.classList.add("wrong");
+      clickedBtn.classList.add("gl-on");
       clickedBtn.disabled = true;
       setFb(field, "bad", "✗ Неверно — выбери другой вариант");
     } else if(mode==="type"){
@@ -2010,7 +2069,7 @@ function attemptField(field, rawValue, clickedBtn){
   var hintBtn = cardArea.querySelector('.hintbtn[data-field="'+field+'"]');
   if(mode==="choice"){
     var group = cardArea.querySelector('.choices[data-group="'+field+'"]');
-    Array.prototype.forEach.call(group.querySelectorAll(".choice-btn"), function(b){ b.disabled = true; });
+    Array.prototype.forEach.call(group.querySelectorAll(".choice-btn"), function(b){ b.disabled = true; b.classList.add("gl-on"); });
     clickedBtn.classList.remove("wrong");
     clickedBtn.classList.add("correct");
     setFb(field, "ok", "✓ Верно");
@@ -2178,6 +2237,16 @@ function finishWordRound(){
   } else {
     banner.className = "round-banner bad";
     banner.textContent = "✗ Были ошибки или подсказки — слово вернётся завтра";
+  }
+  var expl = explainFor(current);
+  if(expl){
+    var eb = document.createElement("div");
+    eb.className = "explain";
+    var lead = document.createElement("b");
+    lead.textContent = "Пояснение: ";
+    eb.appendChild(lead);
+    eb.appendChild(document.createTextNode(expl));
+    cardArea.appendChild(eb);
   }
   cardArea.appendChild(banner);
   cardArea.appendChild(row);

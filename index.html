@@ -252,6 +252,10 @@ button.deck-select{cursor:pointer;text-align:left;white-space:nowrap;overflow:hi
 /* Long forms ("les plus mauvaises") wrap instead of being cut
    off on a phone. */
 .match-form{white-space:normal;}
+/* Both columns: same line-height and minimum height. The serif label font
+   (Fraunces) has a taller line box than the form column's font, so each
+   label came out ~2px taller and the rows drifted apart going down. */
+.match-pronoun, .match-form{line-height:1.3;min-height:2.9rem;padding-block:8px;}
 .match-row{display:flex;align-items:center;gap:5px;}
 /* single-class selectors on purpose: keeps specificity equal to .choice-btn's
    own base rule, so this only overrides the shared resting look (which it
@@ -715,6 +719,17 @@ var DEFAULT_DECKS = {
       ["lundi","понедельник"],["mardi","вторник"],["mercredi","среда"],
       ["jeudi","четверг"],["vendredi","пятница"],["samedi","суббота"],
       ["dimanche","воскресенье"]
+    ]
+  },
+  "mois-saisons": {
+    name: "Месяцы и времена года",
+    kind: "word",
+    public: true,
+    words: [
+      ["janvier","январь"],["février","февраль"],["mars","март"],["avril","апрель"],
+      ["mai","май"],["juin","июнь"],["juillet","июль"],["août","август"],
+      ["septembre","сентябрь"],["octobre","октябрь"],["novembre","ноябрь"],["décembre","декабрь"],
+      ["le printemps","весна"],["l'été","лето"],["l'automne","осень"],["l'hiver","зима"]
     ]
   },
   "meteo-ch": {

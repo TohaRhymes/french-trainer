@@ -264,6 +264,9 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
 .pick-key{font-size:.75rem;font-weight:400;color:var(--ink-muted);}
 .pick-btn.correct .pick-key, .pick-btn.wrong .pick-key{color:inherit;}
 @media (hover:none){ .pick-key{display:none;} }
+.pick-speak{vertical-align:middle;margin-left:6px;}
+.pick-info{text-align:center;color:var(--ink-muted);font-size:.95rem;text-wrap:balance;margin-top:-4px;}
+.pick-gloss{color:var(--ink);}
 .match-row .speakmini svg{width:11px;height:11px;}
 .match-row .hintbtn:hover{opacity:1;}
 .match-form{font-weight:500;}
@@ -1342,7 +1345,9 @@ function splitClozeNote(s){
   return m ? {main: m[1], note: m[2]} : {main: s, note: null};
 }
 function promptText(e){
-  if(e.kind==="pick") return e.word[1];
+  // The form plus a replay button (listening doesn't give the group away).
+  if(e.kind==="pick") return e.word[1]+' <button type="button" class="speakmini pick-speak" data-word="'+e.word[1]+'" title="Послушать">'+
+    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg></button>';
   if(e.kind==="verb") return e.word[2];
   if(e.kind==="number") return e.word[2];
   if(e.kind==="cloze"){
@@ -1758,6 +1763,43 @@ function renderPickHtml(entry){
       '<span class="pick-key">'+keys[i]+'</span></button>';
   }).join("");
 }
+// After a right answer: what else this form is, on the axes that weren't
+// asked — read off the deck's own chain cards (e.g. "meilleure" sits in
+// "bon · ж.р. ед.ч." as its comparative), so it never drifts from them.
+var DEGREE_NAMES = ["обычная форма","сравнительная форма","превосходная форма"];
+function pickInfo(entry){
+  var form = entry.word[1];
+  var asked = entry.word[2][0];   // "Прилагательное" / "Обычная" / "Хорошее"
+  var hits = [];
+  state.decks[entry.deckId].words.forEach(function(w){
+    if(isPickWord(w) || !Array.isArray(w[1])) return;
+    var idx = w[1].indexOf(form);
+    if(idx===-1) return;
+    var gn = (w[2].match(/(м|ж)\.р\., (ед|мн)\.ч\./) || [""])[0];
+    hits.push({
+      pos: /наречие/.test(w[2]) ? "наречие" : "прилагательное",
+      degree: DEGREE_NAMES[idx],
+      gn: gn,
+      gloss: w[3] ? w[3][idx] : ""
+    });
+  });
+  if(!hits.length) return "";
+  var h = hits[0];
+  var parts = [];
+  if(asked!=="Прилагательное") parts.push(h.pos);
+  if(asked!=="Обычная") parts.push(h.degree);
+  // "mauvais" is both м.р. ед.ч. and м.р. мн.ч. → "м.р., ед.ч. или мн.ч."
+  var byGender = {};
+  hits.forEach(function(x){
+    var m = x.gn.match(/^(.)\.р\., (..)\.ч\.$/);
+    if(!m) return;
+    byGender[m[1]] = byGender[m[1]] || [];
+    if(byGender[m[1]].indexOf(m[2])===-1) byGender[m[1]].push(m[2]);
+  });
+  var gns = Object.keys(byGender).map(function(g){ return g+".р., "+byGender[g].join(".ч. или ")+".ч."; });
+  if(gns.length) parts.push(gns.join("; "));
+  return parts.join(" · ")+(h.gloss ? ' — <span class="pick-gloss">«'+h.gloss+'»</span>' : "");
+}
 function bindPickHandlers(entry){
   var btns = cardArea.querySelectorAll(".pick-btn");
   Array.prototype.forEach.call(btns, function(btn){
@@ -1771,6 +1813,13 @@ function bindPickHandlers(entry){
       }
       resolved.a = true; correctFlags.a = true;
       Array.prototype.forEach.call(btns, function(b){ b.disabled = true; });
+      var info = pickInfo(entry);
+      if(info){
+        var infoEl = document.createElement("div");
+        infoEl.className = "pick-info";
+        infoEl.innerHTML = info;
+        cardArea.querySelector(".pick-row").insertAdjacentElement("afterend", infoEl);
+      }
       btn.classList.remove("wrong");
       btn.classList.add("correct");
       speakFR(entry.word[1], entry.deckId);

@@ -136,6 +136,22 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   background-repeat:no-repeat;background-position:right 10px center;background-size:14px;
 }
 @media (max-width:480px){ .deck-select{width:100%;} }
+/* Deck picker: the pill above opens a checklist — "Всё вместе" on top
+   toggles every deck, the rest pick any subset. Applied when it closes. */
+button.deck-select{cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.deck-picker{position:relative;min-width:0;flex:0 1 auto;max-width:100%;}
+@media (max-width:480px){ .deck-picker{width:100%;} }
+.deck-menu{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:240px;max-width:min(340px, calc(100vw - 32px));
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 24px rgba(32,29,26,.16);padding:6px;display:flex;flex-direction:column;
+}
+.deck-menu label{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:.92rem;}
+.deck-menu label:hover{background:var(--surface-2);}
+.deck-menu input{width:16px;height:16px;margin:0;accent-color:var(--accent);flex:none;}
+.deck-menu .deck-menu-all{font-weight:600;}
+.deck-menu hr{border:0;border-top:1px solid var(--border);margin:4px 6px;}
+.deck-menu .btn{margin:6px 4px 2px;}
 
 .stats{display:flex;gap:8px;flex-wrap:wrap;flex:none;}
 .chip{
@@ -425,7 +441,10 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
     </div>
 
     <div class="filterbar">
-      <select id="deckModeSelect" class="deck-select"></select>
+      <div class="deck-picker" id="deckPicker">
+        <button type="button" class="deck-select" id="deckPickerBtn" aria-haspopup="true" aria-expanded="false"></button>
+        <div class="deck-menu" id="deckMenu" hidden></div>
+      </div>
       <div class="stats" id="statsRow"></div>
     </div>
   </div>
@@ -1240,8 +1259,21 @@ function enabledDeckIds(){
   return Object.keys(state.decks).filter(function(id){ return !state.decks[id].disabled; });
 }
 
+// state.activeDeck: "__all__", one deck id, or "__some__" with the chosen
+// ids in state.activeSet (picked in the deck checklist).
 function activeDeckIds(){
-  return state.activeDeck === "__all__" ? enabledDeckIds() : [state.activeDeck];
+  if(state.activeDeck === "__all__") return enabledDeckIds();
+  if(state.activeDeck === "__some__"){
+    var ids = (state.activeSet||[]).filter(function(id){ return state.decks[id] && !state.decks[id].disabled; });
+    return ids.length ? ids : enabledDeckIds();
+  }
+  return [state.activeDeck];
+}
+// More than one deck in play: cards get a deck tag, lists group by deck.
+function isMultiDeckScope(){ return activeDeckIds().length>1; }
+// Key for the per-scope "Сегодня X/Y" target.
+function scopeKey(){
+  return state.activeDeck==="__some__" ? "__some__:"+activeDeckIds().slice().sort().join(",") : state.activeDeck;
 }
 
 function poolEntries(){
@@ -1611,7 +1643,7 @@ function renderStats(){
   entries.forEach(function(e){ if(state.progress[entryProgKey(e)].learned) learnedCount++; });
   var total = entries.length;
   var doneToday = dailyWordsInScope().length;
-  var frozenTotal = dailyTarget[state.activeDeck];
+  var frozenTotal = dailyTarget[scopeKey()];
   var dueToday = frozenTotal!==undefined ? frozenTotal : (doneToday + queue.length);
   statsRow.innerHTML =
     '<div class="chip chip-click" id="chipLearned">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
@@ -1936,7 +1968,7 @@ function renderCard(){
     (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
     '<div class="'+(isPick?'pick-row':isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
     '<button type="button" class="btn ghost typo-btn" id="typoBtn" hidden>Это опечатка</button>'+
-    (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deckName+'</div>' : '');
+    (isMultiDeckScope() ? '<div class="deck-tag">'+deckName+'</div>' : '');
   cardArea.innerHTML = html;
 
   var typoBtn = document.getElementById("typoBtn");
@@ -2462,11 +2494,11 @@ function startSession(){
   queue = buildDueQueue();
   // The "Сегодня X/Y" target only ever grows within this page load (never
   // shrinks, never lets X exceed Y) — see the dailyTarget comment above.
-  var scopeKey = state.activeDeck;
+  var key = scopeKey();
   var doneNow = dailyWordsInScope().length;
   var liveTotal = doneNow + queue.length;
-  if(dailyTarget[scopeKey]===undefined || liveTotal>dailyTarget[scopeKey]){
-    dailyTarget[scopeKey] = liveTotal;
+  if(dailyTarget[key]===undefined || liveTotal>dailyTarget[key]){
+    dailyTarget[key] = liveTotal;
   }
   updateFooterNote();
   startBatch();
@@ -2476,23 +2508,89 @@ function startSession(){
   nextWord();
 }
 
-// ---- training-mode deck switcher ----
-var deckModeSelect = document.getElementById("deckModeSelect");
+// ---- training-mode deck picker ----
+// A checklist instead of a one-deck <select>, so any subset can be trained
+// together (e.g. all but one). Ticking "Всё вместе" ticks every deck,
+// unticking it clears them. The choice applies when the menu closes; an
+// empty choice falls back to everything.
+var deckPickerBtn = document.getElementById("deckPickerBtn");
+var deckMenu = document.getElementById("deckMenu");
+function ruPluralDecks(n){
+  var m10 = n%10, m100 = n%100;
+  if(m10===1 && m100!==11) return "набор";
+  if(m10>=2 && m10<=4 && (m100<12 || m100>14)) return "набора";
+  return "наборов";
+}
+function deckPickerLabel(){
+  var all = enabledDeckIds(), ids = activeDeckIds();
+  if(state.activeDeck==="__all__" || ids.length===all.length) return "Всё вместе";
+  if(ids.length===1) return state.decks[ids[0]].name;
+  return ids.length+" "+ruPluralDecks(ids.length);
+}
 function populateDeckModeSelect(){
   // A disabled deck is paused from training entirely — not mixed into
-  // "Всё вместе" and not individually selectable either — so it drops out
-  // of this list until re-enabled from "Доступные наборы".
-  var opts = enabledDeckIds().map(function(id){
-    return '<option value="'+id+'"'+(state.activeDeck===id?' selected':'')+'>'+state.decks[id].name+'</option>';
-  }).join("");
-  opts += '<option value="__all__"'+(state.activeDeck==="__all__"?' selected':'')+'>Всё вместе</option>';
-  deckModeSelect.innerHTML = opts;
+  // "Всё вместе" and not selectable either — so it drops out of this list
+  // until re-enabled from "Доступные наборы".
+  deckPickerBtn.textContent = deckPickerLabel();
+  if(!deckMenu.hidden) renderDeckMenu();
 }
-deckModeSelect.onchange = function(){
-  state.activeDeck = deckModeSelect.value;
-  patchState({activeDeck: state.activeDeck});
-  startSession();
+function renderDeckMenu(){
+  var all = enabledDeckIds();
+  var chosen = activeDeckIds();
+  deckMenu.innerHTML =
+    '<label class="deck-menu-all"><input type="checkbox" id="deckAllCb"> Всё вместе</label><hr>'+
+    all.map(function(id){
+      return '<label><input type="checkbox" class="deck-cb" value="'+id+'"'+(chosen.indexOf(id)!==-1?' checked':'')+'> '+state.decks[id].name+'</label>';
+    }).join("")+
+    '<button type="button" class="btn primary" id="deckMenuDone">Готово</button>';
+  var allCb = document.getElementById("deckAllCb");
+  var cbs = deckMenu.querySelectorAll(".deck-cb");
+  function syncAll(){
+    var n = Array.prototype.filter.call(cbs, function(c){ return c.checked; }).length;
+    allCb.checked = n===cbs.length;
+    allCb.indeterminate = n>0 && n<cbs.length;
+  }
+  allCb.onchange = function(){
+    Array.prototype.forEach.call(cbs, function(c){ c.checked = allCb.checked; });
+    syncAll();
+  };
+  Array.prototype.forEach.call(cbs, function(c){ c.onchange = syncAll; });
+  syncAll();
+  document.getElementById("deckMenuDone").onclick = function(){ closeDeckMenu(true); };
+}
+function openDeckMenu(){
+  renderDeckMenu();
+  deckMenu.hidden = false;
+  deckPickerBtn.setAttribute("aria-expanded", "true");
+}
+function closeDeckMenu(apply){
+  if(deckMenu.hidden) return;
+  var picked = Array.prototype.filter.call(deckMenu.querySelectorAll(".deck-cb"), function(c){ return c.checked; })
+    .map(function(c){ return c.value; });
+  deckMenu.hidden = true;
+  deckPickerBtn.setAttribute("aria-expanded", "false");
+  if(!apply) return;
+  var all = enabledDeckIds();
+  var before = scopeKey();
+  if(!picked.length || picked.length===all.length){ state.activeDeck = "__all__"; state.activeSet = []; }
+  else if(picked.length===1){ state.activeDeck = picked[0]; state.activeSet = []; }
+  else { state.activeDeck = "__some__"; state.activeSet = picked; }
+  deckPickerBtn.textContent = deckPickerLabel();
+  if(scopeKey()!==before){
+    patchState({activeDeck: state.activeDeck, activeSet: state.activeSet});
+    startSession();
+  }
+}
+deckPickerBtn.onclick = function(){
+  if(deckMenu.hidden) openDeckMenu(); else closeDeckMenu(true);
 };
+// Clicking anywhere else applies the choice, like a native menu closing.
+document.addEventListener("click", function(e){
+  if(!deckMenu.hidden && e.target.closest && !e.target.closest("#deckPicker")) closeDeckMenu(true);
+});
+document.addEventListener("keydown", function(e){
+  if(e.key==="Escape" && !deckMenu.hidden){ closeDeckMenu(false); deckPickerBtn.focus(); }
+});
 
 // ---- full stats table ----
 function daysBetween(fromStr, toStr){
@@ -2512,7 +2610,7 @@ function wordRowHtml(e, p, trailingLabel){
     : e.kind==="pick"
     ? '<span class="inf">'+e.word[1]+'</span><span class="sep">—</span>'+e.word[2][e.word[3]]
     : '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[1];
-  var deckTag = state.activeDeck==="__all__" ? '<span class="deck-chip">'+state.decks[e.deckId].name+'</span>' : '<span></span>';
+  var deckTag = isMultiDeckScope() ? '<span class="deck-chip">'+state.decks[e.deckId].name+'</span>' : '<span></span>';
   var dots = "";
   for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=p.box?' on':'')+'"></span>'; }
   return '<div class="stat-row'+(p.learned?' is-learned':'')+'">'+
@@ -2547,7 +2645,7 @@ function renderStatsTable(){
     // what's already mastered is what she's checking on most often, so it
     // leads instead of being buried at the bottom.
     if(a.p.box !== b.p.box) return b.p.box - a.p.box;
-    if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
+    if(isMultiDeckScope() && a.e.deckId !== b.e.deckId){
       return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
     }
     return a.e.word[0].localeCompare(b.e.word[0]);
@@ -2614,7 +2712,7 @@ function renderScheduleTable(){
   dateKeys.forEach(function(key){
     var rows = groups[key];
     rows.sort(function(a,b){
-      if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
+      if(isMultiDeckScope() && a.e.deckId !== b.e.deckId){
         return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
       }
       return a.e.word[0].localeCompare(b.e.word[0]);
@@ -2766,7 +2864,7 @@ editDeckSelect.onchange = function(){ showDeckForEdit(editDeckSelect.value); };
 
 document.getElementById("editBtn").onclick = function(){
   if(!state) return;
-  var startId = state.activeDeck==="__all__" ? Object.keys(state.decks)[0] : state.activeDeck;
+  var startId = (state.activeDeck==="__all__" || state.activeDeck==="__some__") ? (activeDeckIds()[0] || Object.keys(state.decks)[0]) : state.activeDeck;
   populateEditDeckSelect(startId);
   showDeckForEdit(startId);
   editOverlay.hidden = false;

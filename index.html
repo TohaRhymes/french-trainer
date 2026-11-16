@@ -1332,7 +1332,13 @@ function frenchAudioFor(e, field){
     var prompt = stripEmoji(e.word[0]);
     return prompt.indexOf("___")!==-1 ? prompt.replace("___", e.word[1]) : e.word[1];
   }
-  if(e.kind==="conjug") return (conjugSay(e.deckId, field)+" "+fieldAnswer(e, field)).trim();
+  if(e.kind==="conjug"){
+    var say = conjugSay(e.deckId, field), form = fieldAnswer(e, field);
+    // Elision: "je aime" is read letter-by-letter wrong — French says j'aime
+    // (also j'ai, j'apprends, j'habite).
+    if(say==="je" && /^[aeiouyàâäéèêëîïôöùûüœh]/i.test(form)) return "j'"+form;
+    return (say+" "+form).trim();
+  }
   return e.word[0];
 }
 // At box 5 (the last, most-practiced level) a conjug card shows the Russian

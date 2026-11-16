@@ -741,6 +741,9 @@ var DEFAULT_DECKS = {
     conjugEyebrow: "Цепочка: обычная → сравнение → превосходная",
     conjugEyebrowRu: "Переведи и построй цепочку сравнения",
     promptBeforeDot: true,
+    // The task is the Russian ("плохой", note "(прилагательное, м.р., ед.ч.)"
+    // below it) at every box, so the French base form isn't handed over.
+    promptRussian: true,
     renamedWords: {"bien · наречие":"bien", "mal · наречие":"mal"},
     words: [
       ["bon · м.р. ед.ч.",["bon","meilleur","le meilleur"],"хороший (прилагательное, м.р., ед.ч.)",
@@ -937,7 +940,7 @@ function normalizeState(raw){
       // Same for the deck's display settings (field labels, eyebrow text):
       // they're copied in at adoption, so a later rename in the catalog
       // would otherwise never reach a deck the user already has.
-      ["pronouns","conjugEyebrow","conjugEyebrowRu","promptBeforeDot"].forEach(function(prop){
+      ["pronouns","conjugEyebrow","conjugEyebrowRu","promptBeforeDot","promptRussian"].forEach(function(prop){
         if(DEFAULT_DECKS[deckId][prop]) s.decks[deckId][prop] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId][prop]));
       });
     });
@@ -1300,7 +1303,7 @@ function conjugTranslation(e, field){
   // At box 5 the whole point is recalling the verb from Russian alone —
   // showing each form's Russian gloss here would hand back exactly what
   // she's supposed to be retrieving from memory.
-  if(conjugShowsRussian(e)) return "";
+  if(e.kind==="conjug" && currentBox()>=5) return "";
   return e.word[3][conjugIdx(e.deckId, field)] || "";
 }
 function answerIsFrench(e, field){
@@ -1335,7 +1338,11 @@ function frenchAudioFor(e, field){
 // At box 5 (the last, most-practiced level) a conjug card shows the Russian
 // translation instead of the French infinitive — she has to recall the verb
 // herself before conjugating it, instead of having it handed to her.
-function conjugShowsRussian(e){ return e.kind==="conjug" && currentBox()>=5; }
+function conjugShowsRussian(e){
+  if(e.kind!=="conjug") return false;
+  var deck = state.decks[e.deckId];
+  return currentBox()>=5 || !!(deck && deck.promptRussian);
+}
 // Splits a cloze translation like "он хороший (прил., м.р.)" into the
 // Russian sentence and its trailing grammar note, so a deck can show the
 // sentence up in the main prompt and keep only the note as the small hint
@@ -1357,7 +1364,9 @@ function promptText(e){
     return e.word[0];
   }
   if(e.kind==="conjug"){
-    if(conjugShowsRussian(e)) return e.word[2];
+    if(conjugShowsRussian(e)){
+      return state.decks[e.deckId].promptRussian ? splitClozeNote(e.word[2]).main : e.word[2];
+    }
     // "bon · ж.р. мн.ч.": the part after " · " only keeps the key unique
     // (four bon cards); gender/number is already in the hint line below.
     return state.decks[e.deckId].promptBeforeDot ? e.word[0].split(" · ")[0] : e.word[0];
@@ -1866,8 +1875,10 @@ function bindMatchHandlers(entry){
         selectedPronounField = null;
         if(requiredFields(entry).every(function(f){ return resolved[f]; })) finishWordRound();
       } else {
+        // The typo button waits for the end of the round (finishWordRound
+        // shows it next to "Дальше" when there was a mistake), same as
+        // on every other card.
         mistaken[field] = true;
-        document.getElementById("typoBtn").hidden = false;
         btn.classList.add("wrong");
         setTimeout(function(){ btn.classList.remove("wrong"); }, 500);
       }
@@ -1909,6 +1920,7 @@ function renderCard(){
   var translationLine = current.kind==="cloze"
     ? (state.decks[current.deckId].translationInPrompt ? splitClozeNote(current.word[3]).note : current.word[3])
     : (current.kind==="conjug" && !conjugShowsRussian(current)) ? current.word[2]
+    : (current.kind==="conjug" && state.decks[current.deckId].promptRussian) ? splitClozeNote(current.word[2]).note
     : null;
 
   var html = ''+

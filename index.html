@@ -1830,8 +1830,36 @@ function distractorScore(correct, candidate, re){
 // Translation of one multiple-choice option (looked up in the deck), shown
 // under the button after a tap. Cloze options are bare grammar words with no
 // translation of their own — the card's explanation covers those.
+// Built-in glosses for cloze options (deck id -> normalized option -> Russian),
+// used when the deck itself carries no optGloss map. Shown under the button
+// after a tap: the tapped one on a miss, every option once it's answered.
+var CLOZE_GLOSS = {
+  "prepositions-ch": {
+    "a":"в, на, к","au":"в, к (à + le)","aux":"в, к (мн.ч., à + les)","a l'":"в, к (перед гласной)","a la":"в, к (ж.р.)","a le":"нет такой формы: à + le = au",
+    "avec":"с","chez":"у, к (кому-то); в (доме, магазине)","dans":"в (внутри)","de":"из, от, о","d'":"из, от (перед гласной)",
+    "de l'":"из, от (перед гласной)","de la":"из, от (ж.р.)","de le":"нет такой формы: de + le = du","du":"из, от (de + le); «немного»","des":"из (de + les); «некоторые»",
+    "derriere":"позади, за","devant":"перед, мимо","en":"в (страна, транспорт, месяц)","jusqu'a":"до","jusqu'au":"до (+ м.р.)",
+    "par":"через, по","pres de":"около, рядом","sans":"без","sous":"под","sur":"на","vers":"к, в сторону","a cote de":"рядом с",
+    "le":"определённый артикль, м.р.","la":"определённый артикль, ж.р.","les":"определённый артикль, мн.ч.","l'":"определённый артикль перед гласной",
+    "un":"неопределённый артикль, м.р.","une":"неопределённый артикль, ж.р."
+  },
+  "meteo-ch": {"fait":"делает (il fait — о погоде)","y a":"есть (il y a)","pleut":"идёт дождь","neige":"снег идёт","grele":"град"},
+  "gr-phrases": {
+    "εγινε":"стал","εγραψε":"написал","εφυγε":"ушёл","εχασε":"потерял, проиграл","ηταν":"был","ιδρυσε":"основал","γεννηθηκε":"родился","ελευθερωσε":"освободил",
+    "κατεκτησε":"завоевал","κατεστρεψε":"разрушил","νικησε":"победил","ξεχασε":"забыл","οδηγησε":"привёл, повёл","πεθανε":"умер","υπεγραψε":"подписал",
+    "επεσα":"я упал","επεσε":"упал","επεσαν":"упали","πεφτει":"падает","καταστραφηκε":"был разрушен","καταστραφηκαν":"были разрушены","καταστρεφεται":"разрушается",
+    "ανεξαρτητος":"независимый (м.р.)","ανεξαρτητη":"независимая (ж.р.)","ανεξαρτητο":"независимое (ср.р.)","ανεξαρτητοι":"независимые (мн.ч.)",
+    "σημαντικος":"важный (м.р.)","σημαντικη":"важная (ж.р.)","σημαντικο":"важное (ср.р.)","σημαντικοι":"важные (мн.ч.)",
+    "απο":"от, из","για":"для, о, за","εναντιον":"против","μεχρι":"до","μαζι":"вместе","με":"с","πριν":"до, перед","σε":"в, на",
+    "στο":"в, на (ср./м.р., σε + το)","στον":"в, на (м.р., σε + τον)","στη":"в, на (ж.р., σε + τη)","στα":"в, на (мн.ч., σε + τα)",
+    "πολη":"город","πολης":"города (род.п.)","πολεις":"города (мн.ч.)","πολεων":"городов (род.п. мн.ч.)"
+  }
+};
 function glossFor(entry, field, opt){
-  if(entry.kind==="cloze") return "";
+  if(entry.kind==="cloze"){
+    var dk = state.decks[entry.deckId], map = (dk && dk.optGloss) || CLOZE_GLOSS[entry.deckId];
+    return (map && map[normalize(opt).normalize("NFD").replace(/[\u0300-\u036f]/g,"")]) || "";
+  }
   var words = state.decks[entry.deckId].words, n = normalize(opt), i, w, v;
   if(entry.kind==="conjug"){
     var idx = conjugIdx(entry.deckId, field), hit = null;

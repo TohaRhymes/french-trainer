@@ -1455,7 +1455,7 @@ if(typeof speechSynthesis !== "undefined"){
 function voiceForLangCode(code){
   var prefix = (code||"fr-FR").split("-")[0].toLowerCase();
   var want = (code||"fr-FR").toLowerCase();
-  var best = null, bestScore = -1;
+  var best = null, bestScore = -Infinity;
   allVoices.forEach(function(v){
     var lang = (v.lang||"").toLowerCase().replace("_","-");
     if(lang.indexOf(prefix)!==0) return;
@@ -1464,7 +1464,13 @@ function voiceForLangCode(code){
     var score = (lang===want ? 10 : 0)
       + (/premium/i.test(v.name) ? 30 : 0)
       + (/enhanced|улучш|расшир/i.test(v.name) ? 20 : 0)
-      + (/google/i.test(v.name) ? 15 : 0);
+      + (/google/i.test(v.name) ? 15 : 0)
+      + (/siri|neural|natural/i.test(v.name) ? 25 : 0)
+      // macOS ships many novelty/compact voices (Eddy, Flo, Grandma, Rocko…)
+      // that mangle elisions like l'école; with nothing better installed,
+      // prefer the classic Thomas/Amélie/Audrey over a random first match.
+      + (/^(thomas|amélie|amelie|audrey|aurélie|aurelie)\b/i.test(v.name) ? 8 : 0)
+      - (/grandma|grandpa|rocko|shelley|sandy|reed|flo|eddy|bad news|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|albert|bahh|fred|junior|kathy|ralph/i.test(v.name) ? 40 : 0);
     if(score>bestScore){ best = v; bestScore = score; }
   });
   return best;

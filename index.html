@@ -136,6 +136,22 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   background-repeat:no-repeat;background-position:right 10px center;background-size:14px;
 }
 @media (max-width:480px){ .deck-select{width:100%;} }
+/* Deck picker: the pill above opens a checklist — "Всё вместе" on top
+   toggles every deck, the rest pick any subset. Applied when it closes. */
+button.deck-select{cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.deck-picker{position:relative;min-width:0;flex:0 1 auto;max-width:100%;}
+@media (max-width:480px){ .deck-picker{width:100%;} }
+.deck-menu{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:240px;max-width:min(340px, calc(100vw - 32px));
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 24px rgba(32,29,26,.16);padding:6px;display:flex;flex-direction:column;
+}
+.deck-menu label{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:.92rem;}
+.deck-menu label:hover{background:var(--surface-2);}
+.deck-menu input{width:16px;height:16px;margin:0;accent-color:var(--accent);flex:none;}
+.deck-menu .deck-menu-all{font-weight:600;}
+.deck-menu hr{border:0;border-top:1px solid var(--border);margin:4px 6px;}
+.deck-menu .btn{margin:6px 4px 2px;}
 
 .deckpick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
 .langtabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:3px;}
@@ -252,9 +268,12 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
    with longer field names ("Превосходная") isn't cut to "Превосх…". */
 .match-col.pronouns{flex:0 0 auto;min-width:clamp(96px, 30vw, 124px);max-width:45%;}
 .match-col.forms{flex:1 1 0;}
-/* Long forms ("les plus mauvaises") wrap instead of being cut off on a phone. */
+/* Long forms ("les plus mauvaises") wrap instead of being cut
+   off on a phone. */
 .match-form{white-space:normal;}
-/* Both columns: same line-height and minimum height, so rows don't drift. */
+/* Both columns: same line-height and minimum height. The serif label font
+   (Fraunces) has a taller line box than the form column's font, so each
+   label came out ~2px taller and the rows drifted apart going down. */
 .match-pronoun, .match-form{line-height:1.3;min-height:2.9rem;padding-block:8px;}
 .match-row{display:flex;align-items:center;gap:5px;}
 /* single-class selectors on purpose: keeps specificity equal to .choice-btn's
@@ -271,6 +290,23 @@ h1,h2,h3{font-family:"Fraunces",Georgia,serif;text-wrap:balance;margin:0;}
   background:var(--accent);color:var(--accent-ink);border-color:var(--accent);box-shadow:none;
 }
 .match-row .hintbtn{width:22px;height:22px;flex:none;opacity:.55;}
+/* The "?" turns into a replay button once matched: keep it the same 22px,
+   or the content-sized label column widens and the whole card shifts. */
+.match-row .speakmini{width:22px;height:22px;}
+
+/* Sorting card: one form, two big group buttons side by side. */
+.pick-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.pick-btn{
+  display:flex;justify-content:center;align-items:baseline;gap:8px;text-align:center;
+  white-space:normal;font-weight:600;padding-block:16px;
+}
+.pick-key{font-size:.75rem;font-weight:400;color:var(--ink-muted);}
+.pick-btn.correct .pick-key, .pick-btn.wrong .pick-key{color:inherit;}
+@media (hover:none){ .pick-key{display:none;} }
+.pick-speak{vertical-align:middle;margin-left:6px;}
+.pick-info{text-align:center;color:var(--ink-muted);font-size:.95rem;text-wrap:balance;margin-top:-4px;}
+.pick-gloss{color:var(--ink);}
+.match-row .speakmini svg{width:11px;height:11px;}
 .match-row .hintbtn:hover{opacity:1;}
 .match-form{font-weight:500;}
 /* The "?" turns into a replay button once matched: keep it the same 22px,
@@ -458,7 +494,10 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
     <div class="filterbar">
       <div class="deckpick">
         <div class="langtabs" id="langTabs" hidden></div>
-        <select id="deckModeSelect" class="deck-select"></select>
+        <div class="deck-picker" id="deckPicker">
+          <button type="button" class="deck-select" id="deckPickerBtn" aria-haspopup="true" aria-expanded="false"></button>
+          <div class="deck-menu" id="deckMenu" hidden></div>
+        </div>
       </div>
       <div class="stats" id="statsRow"></div>
     </div>
@@ -555,7 +594,8 @@ footer.note{font-size:.76rem;color:var(--ink-muted);text-align:center;padding-to
 // else only ever sees the public ones (see availableDeckIds()).
 var DEFAULT_DECKS = {
   "passe-compose": {
-    name: "Passé Composé",
+    public: true,
+    name: "Французский: Passé Composé",
     kind: "verb",
     words: [
       ["Lire","lu","Читать"],["Voir","vu","Видеть"],["Boire","bu","Пить"],
@@ -576,9 +616,9 @@ var DEFAULT_DECKS = {
     ]
   },
   "transport-ch": {
-    name: "Транспорт",
-    kind: "word",
     public: true,
+    name: "Французский: Транспорт",
+    kind: "word",
     words: [
       ["l'heure de pointe","час пик"],
       ["le trottoir","тротуар"],
@@ -624,7 +664,8 @@ var DEFAULT_DECKS = {
     ]
   },
   "prepositions-ch": {
-    name: "Предлоги и артикли",
+    public: true,
+    name: "Французский: Предлоги и артикли",
     kind: "cloze",
     words: [
       ["___ gauche","à",["de","en","dans"],"налево"],
@@ -657,7 +698,8 @@ var DEFAULT_DECKS = {
     ]
   },
   "conjugaison-ch": {
-    name: "Спряжения (présent)",
+    public: true,
+    name: "Французский: Спряжения (présent)",
     kind: "conjug",
     words: [
       ["être",["suis","es","est","sommes","êtes","sont"],"быть",
@@ -695,13 +737,27 @@ var DEFAULT_DECKS = {
       ["partir",["pars","pars","part","partons","partez","partent"],"уезжать, уходить",
         ["я уезжаю","ты уезжаешь","он уезжает","мы уезжаем","вы уезжаете","они уезжают"]],
       ["recevoir",["reçois","reçois","reçoit","recevons","recevez","reçoivent"],"получать",
-        ["я получаю","ты получаешь","он получает","мы получаем","вы получаете","они получают"]]
+        ["я получаю","ты получаешь","он получает","мы получаем","вы получаете","они получают"]],
+      // Regular models: 1st group (-er: -e/-es/-e/-ons/-ez/-ent) and
+      // 2nd group (-ir: -is/-is/-it/-issons/-issez/-issent).
+      ["parler",["parle","parles","parle","parlons","parlez","parlent"],"говорить, разговаривать",
+        ["я говорю","ты говоришь","он говорит","мы говорим","вы говорите","они говорят"]],
+      ["aimer",["aime","aimes","aime","aimons","aimez","aiment"],"любить, нравиться",
+        ["я люблю","ты любишь","он любит","мы любим","вы любите","они любят"]],
+      ["finir",["finis","finis","finit","finissons","finissez","finissent"],"заканчивать",
+        ["я заканчиваю","ты заканчиваешь","он заканчивает","мы заканчиваем","вы заканчиваете","они заканчивают"]],
+      ["choisir",["choisis","choisis","choisit","choisissons","choisissez","choisissent"],"выбирать",
+        ["я выбираю","ты выбираешь","он выбирает","мы выбираем","вы выбираете","они выбирают"]],
+      ["réussir",["réussis","réussis","réussit","réussissons","réussissez","réussissent"],"удаваться, добиваться успеха",
+        ["я добиваюсь","ты добиваешься","он добивается","мы добиваемся","вы добиваетесь","они добиваются"]],
+      ["grandir",["grandis","grandis","grandit","grandissons","grandissez","grandissent"],"расти",
+        ["я расту","ты растёшь","он растёт","мы растём","вы растёте","они растут"]]
     ]
   },
   "nombres-ch": {
-    name: "Числа",
-    kind: "number",
     public: true,
+    name: "Французский: Числа",
+    kind: "number",
     // word shape: [variante CH (suisse), standart FR, chiffre]. Pour la
     // plupart des nombres les deux colonnes sont identiques — seuls 70/80/90
     // diffèrent entre le français de Suisse et le français standard.
@@ -719,17 +775,29 @@ var DEFAULT_DECKS = {
     ]
   },
   "jours-semaine": {
-    name: "Дни недели",
-    kind: "word",
     public: true,
+    name: "Французский: Дни недели",
+    kind: "word",
     words: [
       ["lundi","понедельник"],["mardi","вторник"],["mercredi","среда"],
       ["jeudi","четверг"],["vendredi","пятница"],["samedi","суббота"],
       ["dimanche","воскресенье"]
     ]
   },
+  "mois-saisons": {
+    public: true,
+    name: "Французский: Месяцы и времена года",
+    kind: "word",
+    words: [
+      ["janvier","январь"],["février","февраль"],["mars","март"],["avril","апрель"],
+      ["mai","май"],["juin","июнь"],["juillet","июль"],["août","август"],
+      ["septembre","сентябрь"],["octobre","октябрь"],["novembre","ноябрь"],["décembre","декабрь"],
+      ["le printemps","весна"],["l'été","лето"],["l'automne","осень"],["l'hiver","зима"]
+    ]
+  },
   "meteo-ch": {
-    name: "Погода",
+    public: true,
+    name: "Французский: Погода",
     kind: "cloze",
     // startDueOffsetDays delays this deck's words so they aren't due the
     // same day it lands in everyone's deck list — she asked for them to
@@ -753,9 +821,74 @@ var DEFAULT_DECKS = {
       ["Il ___ ❄️","neige",["fait","y a","pleut"],"идёт снег"],
       ["Il ___ 🧊","grêle",["fait","y a","neige"],"идёт град"]
     ]
+  },
+  // The full bon/bien/mauvais/mal paradigm (GitHub issue #1, part 1): each
+  // card is one gender/number form, and its three fields are the chain
+  // base → comparative → superlative, so the whole chain is recalled with
+  // agreement, not one word picked out of a sentence. Built on the conjug
+  // kind with its own `pronouns` (the three degrees). Only "plus mauvais"
+  // is taught — "pire" was dropped on request.
+  "comparatifs-chaines": {
+    public: true,
+    name: "Французский: Сравнительные степени часть 1",
+    kind: "conjug",
+    pronouns: [
+      {field:"base", label:"Обычная", say:""},
+      {field:"comp", label:"Сравнение", say:""},
+      {field:"sup", label:"Превосходная", say:""}
+    ],
+    conjugEyebrow: "Цепочка: обычная → сравнение → превосходная",
+    conjugEyebrowRu: "Переведи и построй цепочку сравнения",
+    promptBeforeDot: true,
+    // The task is the Russian ("плохой", note "(прилагательное, м.р., ед.ч.)"
+    // below it) at every box, so the French base form isn't handed over.
+    promptRussian: true,
+    renamedWords: {"bien · наречие":"bien", "mal · наречие":"mal"},
+    words: [
+      ["bon · м.р. ед.ч.",["bon","meilleur","le meilleur"],"хороший (прилагательное, м.р., ед.ч.)",
+        ["хороший","лучше","самый лучший"]],
+      ["bon · ж.р. ед.ч.",["bonne","meilleure","la meilleure"],"хорошая (прилагательное, ж.р., ед.ч.)",
+        ["хорошая","лучше","самая лучшая"]],
+      ["bon · м.р. мн.ч.",["bons","meilleurs","les meilleurs"],"хорошие (прилагательное, м.р., мн.ч.)",
+        ["хорошие","лучше","самые лучшие"]],
+      ["bon · ж.р. мн.ч.",["bonnes","meilleures","les meilleures"],"хорошие (прилагательное, ж.р., мн.ч.)",
+        ["хорошие","лучше","самые лучшие"]],
+      ["bien",["bien","mieux","le mieux"],"хорошо (наречие)",
+        ["хорошо","лучше","лучше всего"]],
+      ["mauvais · м.р. ед.ч.",["mauvais","plus mauvais","le plus mauvais"],"плохой (прилагательное, м.р., ед.ч.)",
+        ["плохой","хуже","самый плохой"]],
+      ["mauvais · ж.р. ед.ч.",["mauvaise","plus mauvaise","la plus mauvaise"],"плохая (прилагательное, ж.р., ед.ч.)",
+        ["плохая","хуже","самая плохая"]],
+      ["mauvais · м.р. мн.ч.",["mauvais","plus mauvais","les plus mauvais"],"плохие (прилагательное, м.р., мн.ч.)",
+        ["плохие","хуже","самые плохие"]],
+      ["mauvais · ж.р. мн.ч.",["mauvaises","plus mauvaises","les plus mauvaises"],"плохие (прилагательное, ж.р., мн.ч.)",
+        ["плохие","хуже","самые плохие"]],
+      ["mal",["mal","plus mal","le plus mal"],"плохо (наречие)",
+        ["плохо","хуже","хуже всего"]]
+    ],
+    // The grouped sorting cards that briefly lived here, superseded by the
+    // one-form-per-card ones appended below.
+    removedWords: ["прилагательное или наречие?","обычная или сравнительная?","хорошее или плохое?"]
   }
 };
-DEFAULT_DECKS["comparatifs-ch"] = {"public": true, "kind": "cloze", "name": "Сравнительные степени часть 2", "speakAnswerOnly": true, "translationInPrompt": true, "words": [["Il est ___", "bon", ["bien", "mauvais", "bonne"], "он хороший (прил., м.р.)"], ["Cette raison est ___", "bonne", ["bien", "mauvaise", "bon"], "это хорошая причина (прил., ж.р.)"], ["Ces résultats sont ___", "bons", ["bien", "mauvais", "bonnes"], "эти результаты хорошие (прил., м.р. мн.ч.)"], ["Il travaille ___", "bien", ["bon", "mauvais", "mal"], "он хорошо работает (нареч.)"], ["Elle chante ___", "bien", ["bonne", "mauvaise", "mal"], "она хорошо поёт (нареч.)"], ["Ce film est ___", "mauvais", ["mal", "bon", "mauvaise"], "этот фильм плохой (прил., м.р.)"], ["Ces films sont ___", "mauvais", ["mal", "bons", "mauvaises"], "эти фильмы плохие (прил., м.р. мн.ч. — форма как в ед.ч.)"], ["Cette idée est ___", "mauvaise", ["mal", "bonne", "mauvais"], "эта идея плохая (прил., ж.р.)"], ["Ces lois sont ___", "mauvaises", ["mal", "bonnes", "mauvais"], "эти законы плохие (прил., ж.р. мн.ч.)"], ["Il conduit ___", "mal", ["mauvais", "bon", "bien"], "он плохо водит (нареч.)"], ["Il agit ___", "mal", ["mauvais", "bon", "bien"], "он поступает плохо (нареч.)"], ["Ce vin est ___ que l'autre", "meilleur", ["mieux", "meilleure", "plus mauvais"], "это вино лучше другого (прил., м.р., сравнит.)"], ["Léa est ___ au tennis que Tom", "meilleure", ["mieux", "meilleur", "plus mauvaise"], "Леа лучше в теннисе, чем Том (прил., ж.р., сравнит.)"], ["Ces moyens sont ___ que les autres", "meilleurs", ["meilleures", "plus mauvais", "mieux"], "эти способы лучше остальных (прил., м.р. мн.ч., сравнит.)"], ["Ces pommes sont ___ que les autres", "meilleures", ["meilleurs", "plus mauvaises", "mieux"], "эти яблоки лучше других (прил., ж.р. мн.ч., сравнит.)"], ["Tom est ___ au tennis que Léa", "plus mauvais", ["plus mal", "plus mauvaise", "meilleur"], "Том хуже в теннисе, чем Леа (прил., м.р., сравнит.)"], ["Cette suite est ___ que le premier film", "plus mauvaise", ["plus mal", "plus mauvais", "meilleure"], "это продолжение хуже первого фильма (прил., ж.р., сравнит.)"], ["Ces raisons sont ___ que les tiennes", "plus mauvaises", ["plus mal", "plus mauvais", "meilleures"], "эти причины хуже твоих (прил., ж.р. мн.ч., сравнит.)"], ["Je travaille ___ que Julienne", "mieux", ["meilleur", "plus mal", "meilleure"], "я работаю лучше Юлианны (нареч., сравнит.)"], ["Julienne travaille ___ que moi", "plus mal", ["plus mauvais", "mieux", "plus mauvaise"], "Юлианна работает хуже меня (нареч., сравнит.)"]]};
+
+// Sorting (GitHub issue #1, part 2), one form per card: each form gets its
+// own spaced-repetition progress (one fact per card), and the shuffled queue
+// interleaves the axes and groups on its own. Each axis trains one
+// confusion. pick word shape: [key, form, [group0, group1], groupIdx, question];
+// the key is the form plus the axis tag, since the same form is on several axes.
+function pickCards(question, tag, groups, forms0, forms1){
+  return forms0.map(function(f){ return [f+" · "+tag, f, groups, 0, question]; })
+    .concat(forms1.map(function(f){ return [f+" · "+tag, f, groups, 1, question]; }));
+}
+// (The sorting cards from pickCards() are not added to the deck yet.)
+// Two decks that started life as the owner's own (made in the editor, not
+// here), copied in so everyone can pick them from "Доступные наборы".
+// `noSync`: the owner keeps editing them in the app, so the catalog must not
+// overwrite her copy on load — this is only the starting point for others.
+DEFAULT_DECKS["comparatifs-ch"] = {"public": true, "noSync": true, "kind": "cloze", "name": "Французский: Сравнительные степени часть 2", "speakAnswerOnly": true, "translationInPrompt": true, "words": [["Il est ___", "bon", ["bien", "mauvais", "bonne"], "он хороший (прил., м.р.)"], ["Cette raison est ___", "bonne", ["bien", "mauvaise", "bon"], "это хорошая причина (прил., ж.р.)"], ["Ces résultats sont ___", "bons", ["bien", "mauvais", "bonnes"], "эти результаты хорошие (прил., м.р. мн.ч.)"], ["Il travaille ___", "bien", ["bon", "mauvais", "mal"], "он хорошо работает (нареч.)"], ["Elle chante ___", "bien", ["bonne", "mauvaise", "mal"], "она хорошо поёт (нареч.)"], ["Ce film est ___", "mauvais", ["mal", "bon", "mauvaise"], "этот фильм плохой (прил., м.р.)"], ["Ces films sont ___", "mauvais", ["mal", "bons", "mauvaises"], "эти фильмы плохие (прил., м.р. мн.ч. — форма как в ед.ч.)"], ["Cette idée est ___", "mauvaise", ["mal", "bonne", "mauvais"], "эта идея плохая (прил., ж.р.)"], ["Ces lois sont ___", "mauvaises", ["mal", "bonnes", "mauvais"], "эти законы плохие (прил., ж.р. мн.ч.)"], ["Il conduit ___", "mal", ["mauvais", "bon", "bien"], "он плохо водит (нареч.)"], ["Il agit ___", "mal", ["mauvais", "bon", "bien"], "он поступает плохо (нареч.)"], ["Ce vin est ___ que l'autre", "meilleur", ["mieux", "meilleure", "plus mauvais"], "это вино лучше другого (прил., м.р., сравнит.)"], ["Léa est ___ au tennis que Tom", "meilleure", ["mieux", "meilleur", "plus mauvaise"], "Леа лучше в теннисе, чем Том (прил., ж.р., сравнит.)"], ["Ces moyens sont ___ que les autres", "meilleurs", ["meilleures", "plus mauvais", "mieux"], "эти способы лучше остальных (прил., м.р. мн.ч., сравнит.)"], ["Ces pommes sont ___ que les autres", "meilleures", ["meilleurs", "plus mauvaises", "mieux"], "эти яблоки лучше других (прил., ж.р. мн.ч., сравнит.)"], ["Tom est ___ au tennis que Léa", "plus mauvais", ["plus mal", "plus mauvaise", "meilleur"], "Том хуже в теннисе, чем Леа (прил., м.р., сравнит.)"], ["Cette suite est ___ que le premier film", "plus mauvaise", ["plus mal", "plus mauvais", "meilleure"], "это продолжение хуже первого фильма (прил., ж.р., сравнит.)"], ["Ces raisons sont ___ que les tiennes", "plus mauvaises", ["plus mal", "plus mauvais", "meilleures"], "эти причины хуже твоих (прил., ж.р. мн.ч., сравнит.)"], ["Je travaille ___ que Julienne", "mieux", ["meilleur", "plus mal", "meilleure"], "я работаю лучше Юлианны (нареч., сравнит.)"], ["Julienne travaille ___ que moi", "plus mal", ["plus mauvais", "mieux", "plus mauvaise"], "Юлианна работает хуже меня (нареч., сравнит.)"]]};
+DEFAULT_DECKS["deck-mvzbzfce"] = {"public": true, "noSync": true, "kind": "word", "name": "Французский: Полезные слова", "words": [["un brouillon", "черновик"], ["célibataire", "холостой / незамужняя"], ["divorcé", "разведённый / разведённая"], ["en concubinage", "в гражданском браке (сожительство, без регистрации)"], ["marié", "женат / замужем"], ["pacsé", "в официальном гражданском партнёрстве"], ["veuf", "вдовец / вдова (прил)"], ["une fois", "один раз"], ["le temps", "время / погода"], ["une raison", "причина"], ["un monsieur", "господин"], ["un an", "год"], ["cette année", "в этом году"], ["tenir", "держать"], ["porter", "носить"], ["montrer", "показывать"], ["la fin", "конец"], ["penser", "думать"], ["une partie", "часть"], ["faire partie de", "быть частью, входить в состав"], ["suivre", "следовать"], ["le cas", "случай"], ["compter", "считать"], ["le fait", "факт"], ["remettre", "передать, вручить"], ["remettre à plus tard", "отложить на потом"], ["permettre", "разрешать"], ["occuper", "занимать"], ["devenir", "становиться"], ["un effet", "эффект"], ["un mois", "месяц"], ["sembler", "казаться"], ["un moyen", "средство, способ"], ["la vue", "вид"], ["laisser", "оставлять, позволять (let)"], ["rappeler", "напоминать"], ["agir", "действовать"], ["plusieurs", "несколько"], ["reconnaître", "узнавать, признавать"], ["une idée", "идея"], ["surtout", "особенно"], ["le sens", "смысл"], ["selon", "согласно"], ["retrouver", "находить потерянное"], ["se voir", "видеться"], ["la façon", "способ"], ["expliquer", "объяснять"], ["lorsque", "когда"], ["ensuite", "затем"], ["la guerre", "война"], ["la loi", "закон"], ["réussir", "удаваться"], ["souvent", "часто"], ["un coup", "удар"], ["l'or", "золото"], ["une part", "доля, порция"], ["prendre part à", "принимать участие"], ["pour ma part", "что касается меня"], ["la suite", "продолжение, то что идёт дальше"], ["encore", "ещё, снова"], ["vraiment", "правда"], ["sûr", "уверенный"], ["bien sûr", "конечно"], ["un peu", "немного"], ["trop", "слишком"], ["avoir besoin de", "нуждаться"], ["juste", "просто, только"], ["avoir peur", "бояться"], ["sentir", "чувствовать; пахнуть"], ["se sentir", "чувствовать себя"], ["ouais", "ага, да"], ["rendre", "возвращать (что-то)"], ["rendre visite", "навещать"], ["la main", "кисть руки"], ["vite", "быстро"], ["avoir l'air", "выглядеть (напр. уставшей)"], ["moins", "менее"], ["au moins", "по крайней мере"], ["les yeux", "глаза"], ["tomber", "падать"], ["assez", "достаточно"], ["un truc", "штука, штуковина"], ["envoyer", "отправлять"], ["garder", "хранить, присматривать"], ["un type", "тип, парень"], ["un mec", "парень, мужик"], ["s'asseoir", "садиться"], ["fou", "сумасшедший"], ["se souvenir de", "помнить, вспоминать"], ["prêt", "готовый"], ["je t'en prie", "пожалуйста (в ответ на спасибо)"], ["putain", "чёрт, блин"], ["longtemps", "долго, давно"], ["un gars", "парень"], ["à côté de", "рядом с"], ["vieux", "старый"], ["seulement", "только"], ["gros", "толстый, большой"], ["enfin", "наконец"], ["là-bas", "там"], ["le train", "поезд"], ["manquer", "не хватать"], ["tu me manques", "я скучаю по тебе"], ["raconter", "рассказывать"], ["le corps", "тело"], ["loin", "далеко"], ["sauver", "спасать"], ["le cœur", "сердце"], ["avant", "раньше"], ["à cause de", "из-за"], ["un endroit", "место"], ["le pied", "нога (ступня)"], ["à pied", "пешком"], ["bouger", "двигаться"], ["plutôt", "довольно (напр. высокий)"], ["vendre", "продавать"], ["cacher", "прятать"], ["le boulot", "работа"], ["pleurer", "плакать"], ["mentir", "врать"], ["presque", "почти"], ["dehors", "снаружи, на улице"], ["un verre", "стакан, бокал"], ["l'aide", "помощь"], ["d'abord", "сначала"], ["le niveau", "уровень"]]};
+
 
 var INTERVALS = {1:0,2:1,3:3,4:7,5:16};
 var BATCH_SIZE = 10;
@@ -834,13 +967,50 @@ function normalizeState(raw){
     // наборы" (see availableDeckIds()/adoptDeck()). Only a deck the user
     // already has gets kept in sync with the catalog below.
     //
+    // A catalog deck can rename a word's first field (its key) via
+    // `renamedWords` {oldKey: newFirstField}: the word and its progress
+    // (and today's daily records) move to the new key, so the rename
+    // neither resets progress nor leaves a stale duplicate behind.
+    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+      var ren = DEFAULT_DECKS[deckId].renamedWords;
+      if(!ren || !s.decks[deckId]) return;
+      s.decks[deckId].words.forEach(function(w){
+        var newFirst = ren[wordKey(w[0])];
+        if(!newFirst) return;
+        var oldK = deckProgKey(deckId, wordKey(w[0])), newK = deckProgKey(deckId, wordKey(newFirst));
+        [s.progress, s.daily.words, s.daily.cleanWords, s.daily.reviewedErrors].forEach(function(map){
+          if(map[oldK]!==undefined && map[newK]===undefined) map[newK] = map[oldK];
+          delete map[oldK];
+        });
+        w[0] = newFirst;
+      });
+    });
+    // Retired cards: drop the deck "comparatifs-tri" (briefly its own deck,
+    // never committed) and any word a catalog deck lists in `removedWords`
+    // (by key), together with their progress and today's records.
+    var dropProgress = function(k){
+      [s.progress, s.daily.words, s.daily.cleanWords, s.daily.reviewedErrors].forEach(function(map){ delete map[k]; });
+    };
+    if(s.decks["comparatifs-tri"]){
+      s.decks["comparatifs-tri"].words.forEach(function(w){ dropProgress(deckProgKey("comparatifs-tri", wordKey(w[0]))); });
+      delete s.decks["comparatifs-tri"];
+    }
+    Object.keys(DEFAULT_DECKS).forEach(function(deckId){
+      var gone = DEFAULT_DECKS[deckId].removedWords;
+      if(!gone || !s.decks[deckId]) return;
+      s.decks[deckId].words = s.decks[deckId].words.filter(function(w){
+        if(gone.indexOf(wordKey(w[0]))===-1) return true;
+        dropProgress(deckProgKey(deckId, wordKey(w[0])));
+        return false;
+      });
+    });
     // Backfill new words added to a catalog deck's entry AFTER this user
     // already had that deck (e.g. two more Passé Composé verbs added
     // later) — matched by French term so it never touches/duplicates a
     // word already there, and never touches a deck the user edited/renamed
     // away from the catalog version.
     Object.keys(DEFAULT_DECKS).forEach(function(deckId){
-      if(!s.decks[deckId]) return;
+      if(!s.decks[deckId] || DEFAULT_DECKS[deckId].noSync) return;
       var existingKeys = {};
       s.decks[deckId].words.forEach(function(w){ existingKeys[wordKey(w[0])] = true; });
       DEFAULT_DECKS[deckId].words.forEach(function(w){
@@ -856,12 +1026,18 @@ function normalizeState(raw){
     // came from (shared db or the localStorage fallback), so it self-heals
     // either way.
     Object.keys(DEFAULT_DECKS).forEach(function(deckId){
-      if(!s.decks[deckId]) return;
+      if(!s.decks[deckId] || DEFAULT_DECKS[deckId].noSync) return;
       var catalogByKey = {};
       DEFAULT_DECKS[deckId].words.forEach(function(w){ catalogByKey[wordKey(w[0])] = w; });
       s.decks[deckId].words.forEach(function(w, i){
         var catalogWord = catalogByKey[wordKey(w[0])];
         if(catalogWord) s.decks[deckId].words[i] = JSON.parse(JSON.stringify(catalogWord));
+      });
+      // Same for the deck's display settings (field labels, eyebrow text):
+      // they're copied in at adoption, so a later rename in the catalog
+      // would otherwise never reach a deck the user already has.
+      ["pronouns","conjugEyebrow","conjugEyebrowRu","promptBeforeDot","promptRussian"].forEach(function(prop){
+        if(DEFAULT_DECKS[deckId][prop]) s.decks[deckId][prop] = JSON.parse(JSON.stringify(DEFAULT_DECKS[deckId][prop]));
       });
     });
     Object.keys(s.decks).forEach(function(deckId){
@@ -1529,6 +1705,13 @@ function deckLangKey(id){
   var d = state.decks[id];
   return ((d && d.lang && d.lang.code) || "fr-FR").split("-")[0].toLowerCase();
 }
+
+// A deck can mix in sorting cards (comparatifs-chaines: chains + sorting).
+// A pick word is recognizable by its shape — word[3] is the right group's
+// index (a number), where every other kind has a string/list or nothing.
+function isPickWord(w){ return typeof w[3]==="number"; }
+function wordKind(deck, w){ return isPickWord(w) ? "pick" : deck.kind; }
+
 function enabledDeckIds(){
   var f = state.langFilter;
   return Object.keys(state.decks).filter(function(id){
@@ -1537,15 +1720,28 @@ function enabledDeckIds(){
   });
 }
 
+// state.activeDeck: "__all__", one deck id, or "__some__" with the chosen
+// ids in state.activeSet (picked in the deck checklist).
 function activeDeckIds(){
-  return state.activeDeck === "__all__" ? enabledDeckIds() : [state.activeDeck];
+  if(state.activeDeck === "__all__") return enabledDeckIds();
+  if(state.activeDeck === "__some__"){
+    var ids = (state.activeSet||[]).filter(function(id){ return state.decks[id] && !state.decks[id].disabled; });
+    return ids.length ? ids : enabledDeckIds();
+  }
+  return [state.activeDeck];
+}
+// More than one deck in play: cards get a deck tag, lists group by deck.
+function isMultiDeckScope(){ return activeDeckIds().length>1; }
+// Key for the per-scope "Сегодня X/Y" target.
+function scopeKey(){
+  return state.activeDeck==="__some__" ? "__some__:"+activeDeckIds().slice().sort().join(",") : state.activeDeck;
 }
 
 function poolEntries(){
   var out = [];
   activeDeckIds().forEach(function(deckId){
     var deck = state.decks[deckId];
-    deck.words.forEach(function(w){ out.push({deckId:deckId, kind:deck.kind, word:w}); });
+    deck.words.forEach(function(w){ out.push({deckId:deckId, kind:wordKind(deck, w), word:w}); });
   });
   return out;
 }
@@ -1601,7 +1797,7 @@ function conjugTranslation(e, field){
   // At box 5 the whole point is recalling the verb from Russian alone —
   // showing each form's Russian gloss here would hand back exactly what
   // she's supposed to be retrieving from memory.
-  if(conjugShowsRussian(e)) return "";
+  if(e.kind==="conjug" && currentBox()>=5) return "";
   return e.word[3][conjugIdx(e.deckId, field)] || "";
 }
 function answerIsFrench(e, field){
@@ -1642,7 +1838,11 @@ function frenchAudioFor(e, field){
 // At box 5 (the last, most-practiced level) a conjug card shows the Russian
 // translation instead of the French infinitive — she has to recall the verb
 // herself before conjugating it, instead of having it handed to her.
-function conjugShowsRussian(e){ return e.kind==="conjug" && currentBox()>=5; }
+function conjugShowsRussian(e){
+  if(e.kind!=="conjug") return false;
+  var deck = state.decks[e.deckId];
+  return currentBox()>=5 || !!(deck && deck.promptRussian);
+}
 // Splits a cloze translation like "он хороший (прил., м.р.)" into the
 // Russian sentence and its trailing grammar note, so a deck can show the
 // sentence up in the main prompt and keep only the note as the small hint
@@ -1652,6 +1852,9 @@ function splitClozeNote(s){
   return m ? {main: m[1], note: m[2]} : {main: s, note: null};
 }
 function promptText(e){
+  // The form plus a replay button (listening doesn't give the group away).
+  if(e.kind==="pick") return e.word[1]+' <button type="button" class="speakmini pick-speak" data-word="'+e.word[1]+'" title="Послушать">'+
+    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 5V4L8 9H4z"/></svg></button>';
   if(e.kind==="verb") return e.word[2];
   if(e.kind==="number") return e.word[2];
   if(e.kind==="cloze"){
@@ -1660,12 +1863,20 @@ function promptText(e){
     }
     return e.word[0];
   }
-  if(e.kind==="conjug") return conjugShowsRussian(e) ? e.word[2] : e.word[0];
+  if(e.kind==="conjug"){
+    if(conjugShowsRussian(e)){
+      return state.decks[e.deckId].promptRussian ? splitClozeNote(e.word[2]).main : e.word[2];
+    }
+    // "bon · ж.р. мн.ч.": the part after " · " only keeps the key unique
+    // (four bon cards); gender/number is already in the hint line below.
+    return state.decks[e.deckId].promptBeforeDot ? e.word[0].split(" · ")[0] : e.word[0];
+  }
   return e.direction==="ru2fr" ? e.word[1] : e.word[0];
 }
 function promptEyebrow(e){
   var deck = state.decks[e.deckId];
   var lang = deckLang(e);
+  if(e.kind==="pick") return e.word[4];
   if(e.kind==="verb") return "Переведи на "+lang.name;
   if(e.kind==="number"){
     var variantNote = (deck && deck.variantNote) || "FR и CH";
@@ -1673,6 +1884,11 @@ function promptEyebrow(e){
   }
   if(e.kind==="cloze") return "Вставь пропущенное слово";
   if(e.kind==="conjug"){
+    // A conjug-kind deck that isn't about verbs (comparatifs-chaines) words
+    // its own eyebrow instead of "Проспрягай ...".
+    if(deck && deck.conjugEyebrow){
+      return conjugShowsRussian(e) ? (deck.conjugEyebrowRu || deck.conjugEyebrow) : deck.conjugEyebrow;
+    }
     if(deck && deck.conjugPrompt){
       return conjugShowsRussian(e) ? "Переведи на "+lang.name+" · "+deck.conjugPrompt : "Шаг 2 из 2 · "+deck.conjugPrompt;
     }
@@ -1979,7 +2195,7 @@ function renderStats(){
   entries.forEach(function(e){ if(state.progress[entryProgKey(e)].learned) learnedCount++; });
   var total = entries.length;
   var doneToday = dailyWordsInScope().length;
-  var frozenTotal = dailyTarget[state.activeDeck];
+  var frozenTotal = dailyTarget[scopeKey()];
   var dueToday = frozenTotal!==undefined ? frozenTotal : (doneToday + queue.length);
   statsRow.innerHTML =
     '<div class="chip chip-click" id="chipLearned">Выучено <b>'+learnedCount+'/'+total+'</b></div>'+
@@ -2165,6 +2381,89 @@ function moveFormOpposite(btn, rowIdx){
   });
 }
 
+// ---- pick kind: one form, two group buttons ----
+function renderPickHtml(entry){
+  var keys = ["←","→"];
+  return entry.word[2].map(function(label, i){
+    return '<button type="button" class="choice-btn pick-btn" data-b="'+i+'">'+label+
+      '<span class="pick-key">'+keys[i]+'</span></button>';
+  }).join("");
+}
+// After a right answer: what else this form is, on the axes that weren't
+// asked — read off the deck's own chain cards (e.g. "meilleure" sits in
+// "bon · ж.р. ед.ч." as its comparative), so it never drifts from them.
+var DEGREE_NAMES = ["обычная форма","сравнительная форма","превосходная форма"];
+function pickInfo(entry){
+  var form = entry.word[1];
+  var asked = entry.word[2][0];   // "Прилагательное" / "Обычная" / "Хорошее"
+  var hits = [];
+  state.decks[entry.deckId].words.forEach(function(w){
+    if(isPickWord(w) || !Array.isArray(w[1])) return;
+    var idx = w[1].indexOf(form);
+    if(idx===-1) return;
+    var gn = (w[2].match(/(м|ж)\.р\., (ед|мн)\.ч\./) || [""])[0];
+    hits.push({
+      pos: /наречие/.test(w[2]) ? "наречие" : "прилагательное",
+      degree: DEGREE_NAMES[idx],
+      gn: gn,
+      gloss: w[3] ? w[3][idx] : ""
+    });
+  });
+  if(!hits.length) return "";
+  var h = hits[0];
+  var parts = [];
+  if(asked!=="Прилагательное") parts.push(h.pos);
+  if(asked!=="Обычная") parts.push(h.degree);
+  // "mauvais" is both м.р. ед.ч. and м.р. мн.ч. → "м.р., ед.ч. или мн.ч."
+  var byGender = {};
+  hits.forEach(function(x){
+    var m = x.gn.match(/^(.)\.р\., (..)\.ч\.$/);
+    if(!m) return;
+    byGender[m[1]] = byGender[m[1]] || [];
+    if(byGender[m[1]].indexOf(m[2])===-1) byGender[m[1]].push(m[2]);
+  });
+  var gns = Object.keys(byGender).map(function(g){ return g+".р., "+byGender[g].join(".ч. или ")+".ч."; });
+  if(gns.length) parts.push(gns.join("; "));
+  return parts.join(" · ")+(h.gloss ? ' — <span class="pick-gloss">«'+h.gloss+'»</span>' : "");
+}
+function bindPickHandlers(entry){
+  var btns = cardArea.querySelectorAll(".pick-btn");
+  Array.prototype.forEach.call(btns, function(btn){
+    btn.onclick = function(){
+      if(resolved.a || btn.disabled) return;
+      if(Number(btn.dataset.b)!==entry.word[3]){
+        mistaken.a = true;
+        btn.classList.add("wrong");
+        btn.disabled = true;
+        return;
+      }
+      resolved.a = true; correctFlags.a = true;
+      Array.prototype.forEach.call(btns, function(b){ b.disabled = true; });
+      var info = pickInfo(entry);
+      if(info){
+        var infoEl = document.createElement("div");
+        infoEl.className = "pick-info";
+        infoEl.innerHTML = info;
+        cardArea.querySelector(".pick-row").insertAdjacentElement("afterend", infoEl);
+      }
+      btn.classList.remove("wrong");
+      btn.classList.add("correct");
+      speakFR(entry.word[1], entry.deckId);
+      finishWordRound();
+    };
+  });
+}
+// ←/→ (or 1/2) pick the left/right group.
+document.addEventListener("keydown", function(e){
+  if(!current || current.kind!=="pick" || resolved.a) return;
+  var t = e.target;
+  if(t && t.closest && (t.closest(".overlay") || t.tagName==="INPUT" || t.tagName==="TEXTAREA" || t.tagName==="SELECT")) return;
+  var b = (e.key==="ArrowLeft" || e.key==="1") ? 0 : (e.key==="ArrowRight" || e.key==="2") ? 1 : -1;
+  if(b<0) return;
+  var btn = cardArea.querySelector('.pick-btn[data-b="'+b+'"]');
+  if(btn && !btn.disabled){ e.preventDefault(); btn.click(); }
+});
+
 function bindMatchHandlers(entry){
   Array.prototype.forEach.call(cardArea.querySelectorAll(".match-pronoun"), function(btn){
     btn.onclick = function(){
@@ -2254,7 +2553,7 @@ function renderFindStep(){
       return '<button type="button" class="choice-btn" data-val="'+attrEsc(opt)+'" data-gl="'+attrEsc(fw ? fw[2] : "")+'">'+opt+'</button>';
     }).join("")+
     '</div><div class="fb" data-fb="find" role="status" hidden></div></div></div>'+
-    (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deck.name+'</div>' : '');
+    (isMultiDeckScope() ? '<div class="deck-tag">'+deck.name+'</div>' : '');
   cardArea.innerHTML = html;
   Array.prototype.forEach.call(cardArea.querySelectorAll(".choice-btn"), function(btn){
     btn.onclick = function(){
@@ -2284,22 +2583,27 @@ function renderCard(){
   var fields = requiredFields(current);
   var isMatching = current.kind==="conjug" && box<=2 && state.decks[current.deckId].matching===true;
   var isConjugType = current.kind==="conjug" && !isMatching;
-  var fieldsHtml = isMatching ? renderMatchHtml(current) : fields.map(function(f){ return fieldBlock(current, f); }).join("");
+  var isPick = current.kind==="pick";
+  var fieldsHtml = isPick ? renderPickHtml(current)
+    : isMatching ? renderMatchHtml(current)
+    : fields.map(function(f){ return fieldBlock(current, f); }).join("");
   var deckName = state.decks[current.deckId].name;
   // At box 5 the translation IS the main prompt (see conjugShowsRussian) —
   // repeating it again here as a hint line would just show it twice.
   var translationLine = current.kind==="cloze"
     ? (state.decks[current.deckId].translationInPrompt ? splitClozeNote(current.word[3]).note : current.word[3])
-    : (current.kind==="conjug" && !conjugShowsRussian(current) ? current.word[2] : null);
+    : (current.kind==="conjug" && !conjugShowsRussian(current)) ? current.word[2]
+    : (current.kind==="conjug" && state.decks[current.deckId].promptRussian) ? splitClozeNote(current.word[2]).note
+    : null;
 
   var html = ''+
     '<div class="eyebrow"><span>'+promptEyebrow(current)+(freePractice&&!reviewingErrors?(redoActive?' · повтор без счёта':' · свободно'):'')+'</span><span class="box-dots">'+dots+'</span></div>'+
     '<div class="ruword">'+promptText(current)+'</div>'+
     (translationLine ? '<div class="hint" style="margin-top:-10px">'+translationLine+'</div>' : '')+
-    '<div class="'+(isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
+    '<div class="'+(isPick?'pick-row':isMatching?'match-wrap':('fields-row'+(isConjugType?' conjug-grid':'')))+'">'+fieldsHtml+'</div>'+
     (isMatching ? '<div class="fb" data-fb="__match" role="status" hidden></div>' : '')+
     '<button type="button" class="btn ghost typo-btn" id="typoBtn" hidden>Это опечатка</button>'+
-    (state.activeDeck==="__all__" ? '<div class="deck-tag">'+deckName+'</div>' : '');
+    (isMultiDeckScope() ? '<div class="deck-tag">'+deckName+'</div>' : '');
   cardArea.innerHTML = html;
 
   var typoBtn = document.getElementById("typoBtn");
@@ -2355,6 +2659,10 @@ function renderCard(){
     }
   };
 
+  if(isPick){
+    bindPickHandlers(current);
+    return;
+  }
   if(isMatching){
     bindMatchHandlers(current);
     return;
@@ -2623,6 +2931,9 @@ document.addEventListener("keydown", function(e){
 // Returns true if it actually animated, so callers that would otherwise
 // instantly navigate away (e.g. the typo button auto-advancing) can hold
 // off just long enough for the animation to be visible.
+// Also shows a drop (a learned word missed falls 5 → 4): the lost dot
+// shudders and greys out. Compares against the dots actually on screen, so
+// the typo button undoing a drop pops the dot back.
 function animateBoxLevelUp(oldBox){
   if(freePractice || oldBox===null) return false;
   var newBox = currentBox();
@@ -2775,12 +3086,18 @@ function undoLastResult(){
   nextWord();
 }
 
+
+// This round's progress entry as it was before applyProgress touched it —
+// lets "Это опечатка" undo a mistake's effect before scoring it clean.
+var progressBeforeRound = null;
 function applyProgress(clean){
   if(freePractice) return;
   var key = entryProgKey(current);
   var p = state.progress[key];
   var wasLearned = p.learned;
   lastUndo = {key:key, prev:JSON.parse(JSON.stringify(p)), clean:clean, learnedNow:false};
+
+    progressBeforeRound = JSON.parse(JSON.stringify(p));
 
   if(clean){
     p.box = Math.min(p.box+1, 5);
@@ -2940,11 +3257,11 @@ function startSession(){
   queue = buildDueQueue();
   // The "Сегодня X/Y" target only ever grows within this page load (never
   // shrinks, never lets X exceed Y) — see the dailyTarget comment above.
-  var scopeKey = state.activeDeck;
+  var key = scopeKey();
   var doneNow = dailyWordsInScope().length;
   var liveTotal = doneNow + queue.length;
-  if(dailyTarget[scopeKey]===undefined || liveTotal>dailyTarget[scopeKey]){
-    dailyTarget[scopeKey] = liveTotal;
+  if(dailyTarget[key]===undefined || liveTotal>dailyTarget[key]){
+    dailyTarget[key] = liveTotal;
   }
   updateFooterNote();
   startBatch();
@@ -2955,7 +3272,6 @@ function startSession(){
 }
 
 // ---- training-mode deck switcher ----
-var deckModeSelect = document.getElementById("deckModeSelect");
 var LANG_TAB_LABELS = {fr:"Français", el:"Ελληνικά"};
 function renderLangTabs(){
   var el = document.getElementById("langTabs");
@@ -2971,31 +3287,103 @@ function renderLangTabs(){
     return '<button type="button" class="langtab'+(state.langFilter===k?' on':'')+'" data-lang="'+k+'">'+
       (k==="__all__" ? "Все" : (LANG_TAB_LABELS[k] || k.toUpperCase()))+'</button>';
   }).join("");
-  if(state.activeDeck!=="__all__" && enabledDeckIds().indexOf(state.activeDeck)<0) state.activeDeck = "__all__";
+  if(state.activeDeck==="__some__"){
+    // a language tab switch keeps only the chosen decks that are still shown
+    var shown = enabledDeckIds();
+    state.activeSet = (state.activeSet||[]).filter(function(id){ return shown.indexOf(id)!==-1; });
+    if(state.activeSet.length<2){ state.activeDeck = state.activeSet.length ? state.activeSet[0] : "__all__"; state.activeSet = []; }
+  } else if(state.activeDeck!=="__all__" && enabledDeckIds().indexOf(state.activeDeck)<0) state.activeDeck = "__all__";
+}
+// ---- training-mode deck picker ----
+// A checklist instead of a one-deck <select>, so any subset can be trained
+// together (e.g. all but one). Ticking "Всё вместе" ticks every deck,
+// unticking it clears them. The choice applies when the menu closes; an
+// empty choice falls back to everything.
+var deckPickerBtn = document.getElementById("deckPickerBtn");
+var deckMenu = document.getElementById("deckMenu");
+function ruPluralDecks(n){
+  var m10 = n%10, m100 = n%100;
+  if(m10===1 && m100!==11) return "набор";
+  if(m10>=2 && m10<=4 && (m100<12 || m100>14)) return "набора";
+  return "наборов";
+}
+function deckPickerLabel(){
+  var all = enabledDeckIds(), ids = activeDeckIds();
+  if(state.activeDeck==="__all__" || ids.length===all.length) return "Всё вместе";
+  if(ids.length===1) return state.decks[ids[0]].name;
+  return ids.length+" "+ruPluralDecks(ids.length);
 }
 function populateDeckModeSelect(){
   renderLangTabs();
   // A disabled deck is paused from training entirely — not mixed into
-  // "Всё вместе" and not individually selectable either — so it drops out
-  // of this list until re-enabled from "Доступные наборы".
-  // sorted by display name (not by internal id), so the list reads in a stable, predictable order
-  var opts = enabledDeckIds().slice().sort(function(x,y){ return state.decks[x].name.localeCompare(state.decks[y].name, "ru"); }).map(function(id){
-    return '<option value="'+id+'"'+(state.activeDeck===id?' selected':'')+'>'+state.decks[id].name+'</option>';
-  }).join("");
-  opts += '<option value="__all__"'+(state.activeDeck==="__all__"?' selected':'')+'>Всё вместе</option>';
-  deckModeSelect.innerHTML = opts;
+  // "Всё вместе" and not selectable either — so it drops out of this list
+  // until re-enabled from "Доступные наборы".
+  deckPickerBtn.textContent = deckPickerLabel();
+  if(!deckMenu.hidden) renderDeckMenu();
 }
-deckModeSelect.onchange = function(){
-  state.activeDeck = deckModeSelect.value;
-  patchState({activeDeck: state.activeDeck});
-  startSession();
+function renderDeckMenu(){
+  var all = enabledDeckIds();
+  var chosen = activeDeckIds();
+  deckMenu.innerHTML =
+    '<label class="deck-menu-all"><input type="checkbox" id="deckAllCb"> Всё вместе</label><hr>'+
+    all.slice().sort(function(x,y){ return state.decks[x].name.localeCompare(state.decks[y].name, "ru"); }).map(function(id){
+      return '<label><input type="checkbox" class="deck-cb" value="'+id+'"'+(chosen.indexOf(id)!==-1?' checked':'')+'> '+state.decks[id].name+'</label>';
+    }).join("")+
+    '<button type="button" class="btn primary" id="deckMenuDone">Готово</button>';
+  var allCb = document.getElementById("deckAllCb");
+  var cbs = deckMenu.querySelectorAll(".deck-cb");
+  function syncAll(){
+    var n = Array.prototype.filter.call(cbs, function(c){ return c.checked; }).length;
+    allCb.checked = n===cbs.length;
+    allCb.indeterminate = n>0 && n<cbs.length;
+  }
+  allCb.onchange = function(){
+    Array.prototype.forEach.call(cbs, function(c){ c.checked = allCb.checked; });
+    syncAll();
+  };
+  Array.prototype.forEach.call(cbs, function(c){ c.onchange = syncAll; });
+  syncAll();
+  document.getElementById("deckMenuDone").onclick = function(){ closeDeckMenu(true); };
+}
+function openDeckMenu(){
+  renderDeckMenu();
+  deckMenu.hidden = false;
+  deckPickerBtn.setAttribute("aria-expanded", "true");
+}
+function closeDeckMenu(apply){
+  if(deckMenu.hidden) return;
+  var picked = Array.prototype.filter.call(deckMenu.querySelectorAll(".deck-cb"), function(c){ return c.checked; })
+    .map(function(c){ return c.value; });
+  deckMenu.hidden = true;
+  deckPickerBtn.setAttribute("aria-expanded", "false");
+  if(!apply) return;
+  var all = enabledDeckIds();
+  var before = scopeKey();
+  if(!picked.length || picked.length===all.length){ state.activeDeck = "__all__"; state.activeSet = []; }
+  else if(picked.length===1){ state.activeDeck = picked[0]; state.activeSet = []; }
+  else { state.activeDeck = "__some__"; state.activeSet = picked; }
+  deckPickerBtn.textContent = deckPickerLabel();
+  if(scopeKey()!==before){
+    patchState({activeDeck: state.activeDeck, activeSet: state.activeSet});
+    startSession();
+  }
+}
+deckPickerBtn.onclick = function(){
+  if(deckMenu.hidden) openDeckMenu(); else closeDeckMenu(true);
 };
+// Clicking anywhere else applies the choice, like a native menu closing.
+document.addEventListener("click", function(e){
+  if(!deckMenu.hidden && e.target.closest && !e.target.closest("#deckPicker")) closeDeckMenu(true);
+});
+document.addEventListener("keydown", function(e){
+  if(e.key==="Escape" && !deckMenu.hidden){ closeDeckMenu(false); deckPickerBtn.focus(); }
+});
 
 document.getElementById("langTabs").addEventListener("click", function(e){
   var b = e.target.closest && e.target.closest(".langtab");
   if(!b || !state) return;
   state.langFilter = b.dataset.lang;
-  state.activeDeck = "__all__";
+  state.activeDeck = "__all__"; state.activeSet = [];
   patchState({langFilter: state.langFilter});
   dailyTarget = {}; // the "today X/Y" total is per scope; a new language is a new scope
   populateDeckModeSelect();
@@ -3017,8 +3405,10 @@ function wordRowHtml(e, p, trailingLabel){
     ? '<span class="inf">'+e.word[2]+'</span><span class="sep">—</span>'+(e.word[0]===e.word[1] ? e.word[0] : e.word[0]+' / '+e.word[1])
     : e.kind==="conjug"
     ? '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[2]
+    : e.kind==="pick"
+    ? '<span class="inf">'+e.word[1]+'</span><span class="sep">—</span>'+e.word[2][e.word[3]]
     : '<span class="inf">'+e.word[0]+'</span><span class="sep">—</span>'+e.word[1];
-  var deckTag = state.activeDeck==="__all__" ? '<span class="deck-chip">'+state.decks[e.deckId].name+'</span>' : '<span></span>';
+  var deckTag = isMultiDeckScope() ? '<span class="deck-chip">'+state.decks[e.deckId].name+'</span>' : '<span></span>';
   var dots = "";
   for(var i=1;i<=5;i++){ dots += '<span class="dot'+(i<=p.box?' on':'')+'"></span>'; }
   return '<div class="stat-row'+(p.learned?' is-learned':'')+'">'+
@@ -3053,7 +3443,7 @@ function renderStatsTable(){
     // what's already mastered is what she's checking on most often, so it
     // leads instead of being buried at the bottom.
     if(a.p.box !== b.p.box) return b.p.box - a.p.box;
-    if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
+    if(isMultiDeckScope() && a.e.deckId !== b.e.deckId){
       return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
     }
     return a.e.word[0].localeCompare(b.e.word[0]);
@@ -3120,7 +3510,7 @@ function renderScheduleTable(){
   dateKeys.forEach(function(key){
     var rows = groups[key];
     rows.sort(function(a,b){
-      if(state.activeDeck==="__all__" && a.e.deckId !== b.e.deckId){
+      if(isMultiDeckScope() && a.e.deckId !== b.e.deckId){
         return state.decks[a.e.deckId].name.localeCompare(state.decks[b.e.deckId].name);
       }
       return a.e.word[0].localeCompare(b.e.word[0]);
@@ -3257,7 +3647,11 @@ function showDeckForEdit(deckId){
     : deck.kind==="conjug"
     ? "Формат: infinitif;"+conjugFields(deckId).join("|")+";перевод;я…|ты…|он…|мы…|вы…|они… — по одной строке ("+conjugFields(deckId).length+" форм через |, в порядке "+conjugFields(deckId).map(function(f){ return conjugLabel(deckId,f); }).join("/")+"; последняя часть с переводом по лицам необязательна — показывается рядом с местоимением на компьютере). Сохранение пересоберёт карточки; прогресс по существующим словам сохранится."
     : "Формат: слово;перевод — по одной строке. Сохранение пересоберёт карточки; прогресс по существующим словам сохранится.";
+  if(deck.words.some(isPickWord)){
+    editFormatHint.textContent += " Карточки сортировки: ключ;форма;группа 1|группа 2;номер верной группы (1 или 2);вопрос.";
+  }
   editArea.value = deck.words.map(function(w){
+    if(isPickWord(w)) return [w[0], w[1], w[2].join("|"), w[3]+1, w[4]].join(";");
     if(deck.kind==="cloze") return [w[0], w[1], w[2].join("|"), w[3]].join(";");
     if(deck.kind==="conjug") return [w[0], w[1].join("|"), w[2]].join(";") + (w[3] ? ";"+w[3].join("|") : "");
     return w.join(";");
@@ -3268,7 +3662,7 @@ editDeckSelect.onchange = function(){ showDeckForEdit(editDeckSelect.value); };
 
 document.getElementById("editBtn").onclick = function(){
   if(!state) return;
-  var startId = state.activeDeck==="__all__" ? Object.keys(state.decks)[0] : state.activeDeck;
+  var startId = (state.activeDeck==="__all__" || state.activeDeck==="__some__") ? (activeDeckIds()[0] || Object.keys(state.decks)[0]) : state.activeDeck;
   populateEditDeckSelect(startId);
   showDeckForEdit(startId);
   editOverlay.hidden = false;
@@ -3298,6 +3692,9 @@ document.getElementById("saveEditBtn").onclick = function(){
   var words = lines.map(function(l){
     var parts = l.split(";").map(function(p){ return p.trim(); });
     if(kind==="verb" || kind==="number") return [parts[0]||"", parts[1]||"", parts[2]||""];
+    if(/^[12]$/.test(parts[3]||"")) return [parts[0]||"", parts[1]||"",
+      (parts[2]||"").split("|").map(function(d){ return d.trim(); }).slice(0, 2),
+      Number(parts[3])-1, parts[4]||""];
     if(kind==="cloze") return [parts[0]||"", parts[1]||"", (parts[2]||"").split("|").map(function(d){ return d.trim(); }).filter(Boolean), parts[3]||""];
     if(kind==="conjug") return parts[3]
       ? [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||"", parts[3].split("|").map(function(d){ return d.trim(); })]

@@ -1710,7 +1710,17 @@ function deckLangKey(id){
 // A pick word is recognizable by its shape — word[3] is the right group's
 // index (a number), where every other kind has a string/list or nothing.
 function isPickWord(w){ return typeof w[3]==="number"; }
-function wordKind(deck, w){ return isPickWord(w) ? "pick" : deck.kind; }
+// A word deck can also hold fill-in-the-blank cards ("Транспорт и город"):
+// [phrase with ___, answer, [3 distractors], translation] — recognized by
+// word[2] being a list and word[3] a string (a pick word has a number there).
+function isClozeWord(w){ return Array.isArray(w[2]) && typeof w[3]==="string"; }
+// the "word ↔ translation" part of a deck, without its fill-in cards
+function plainWords(deck){ return deck.kind==="cloze" ? deck.words : deck.words.filter(function(w){ return !isClozeWord(w); }); }
+function wordKind(deck, w){
+  if(isPickWord(w)) return "pick";
+  if(deck.kind!=="cloze" && isClozeWord(w)) return "cloze";
+  return deck.kind;
+}
 
 function enabledDeckIds(){
   var f = state.langFilter;
@@ -2103,7 +2113,7 @@ function glossFor(entry, field, opt){
     var dk = state.decks[entry.deckId], map = (dk && dk.optGloss) || CLOZE_GLOSS[entry.deckId];
     return (map && map[normalize(opt).normalize("NFD").replace(/[\u0300-\u036f]/g,"")]) || "";
   }
-  var words = state.decks[entry.deckId].words, n = normalize(opt), i, w, v;
+  var words = plainWords(state.decks[entry.deckId]), n = normalize(opt), i, w, v;
   if(entry.kind==="conjug"){
     var idx = conjugIdx(entry.deckId, field), hit = null;
     for(i=0;i<words.length;i++){ if(normalize(words[i][1][idx]||"")===n){ hit = words[i]; break; } }
@@ -2159,7 +2169,7 @@ function distractorsFor(entry, field, correctAnswer){
   }
   var correctNorm = normalize(correctAnswer);
   var deck = state.decks[entry.deckId];
-  var deckWords = deck.words;
+  var deckWords = plainWords(deck);
   var articleRe = articleRegexFor(deck);
   var seen = {}; var candidates = [];
   deckWords.forEach(function(w){
@@ -3652,7 +3662,7 @@ function showDeckForEdit(deckId){
   }
   editArea.value = deck.words.map(function(w){
     if(isPickWord(w)) return [w[0], w[1], w[2].join("|"), w[3]+1, w[4]].join(";");
-    if(deck.kind==="cloze") return [w[0], w[1], w[2].join("|"), w[3]].join(";");
+    if(deck.kind==="cloze" || isClozeWord(w)) return [w[0], w[1], w[2].join("|"), w[3]].join(";");
     if(deck.kind==="conjug") return [w[0], w[1].join("|"), w[2]].join(";") + (w[3] ? ";"+w[3].join("|") : "");
     return w.join(";");
   }).join("\n");
@@ -3695,7 +3705,7 @@ document.getElementById("saveEditBtn").onclick = function(){
     if(/^[12]$/.test(parts[3]||"")) return [parts[0]||"", parts[1]||"",
       (parts[2]||"").split("|").map(function(d){ return d.trim(); }).slice(0, 2),
       Number(parts[3])-1, parts[4]||""];
-    if(kind==="cloze") return [parts[0]||"", parts[1]||"", (parts[2]||"").split("|").map(function(d){ return d.trim(); }).filter(Boolean), parts[3]||""];
+    if(kind==="cloze" || (kind==="word" && parts.length>=4)) return [parts[0]||"", parts[1]||"", (parts[2]||"").split("|").map(function(d){ return d.trim(); }).filter(Boolean), parts[3]||""];
     if(kind==="conjug") return parts[3]
       ? [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||"", parts[3].split("|").map(function(d){ return d.trim(); })]
       : [parts[0]||"", (parts[1]||"").split("|").map(function(d){ return d.trim(); }), parts[2]||""];

@@ -176,6 +176,9 @@ button.deck-select{cursor:pointer;text-align:left;white-space:nowrap;overflow:hi
 .dot.on{background:var(--accent);}
 @keyframes dotPop{0%{transform:scale(.3);opacity:.4;}55%{transform:scale(2);opacity:1;}100%{transform:scale(1);opacity:1;}}
 .dot.pop{animation:dotPop .45s ease-out;}
+/* A box lost (learned word missed): the last dot shudders and fades to grey. */
+@keyframes dotDrop{0%{transform:scale(1);background:var(--accent);}25%{transform:scale(1.6) translateX(-2px);background:var(--accent);}45%{transform:scale(1.6) translateX(2px);}65%{transform:scale(1.3) translateX(-1px);}100%{transform:scale(1);background:var(--border);}}
+.dot.drop{animation:dotDrop .6s ease-out;}
 
 .ruword{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:2.35rem;text-align:center;padding-block:6px;letter-spacing:-0.015em;}
 .ruword-translation{font-family:"Public Sans",ui-sans-serif,system-ui,sans-serif;font-weight:400;font-size:1rem;color:var(--ink-muted);letter-spacing:normal;margin-top:4px;}
@@ -2279,21 +2282,25 @@ document.addEventListener("keydown", function(e){
 // Returns true if it actually animated, so callers that would otherwise
 // instantly navigate away (e.g. the typo button auto-advancing) can hold
 // off just long enough for the animation to be visible.
+// Also shows a drop (a learned word missed falls 5 → 4): the lost dot
+// shudders and greys out. Compares against the dots actually on screen, so
+// the typo button undoing a drop pops the dot back.
 function animateBoxLevelUp(oldBox){
   if(freePractice || oldBox===null) return false;
   var newBox = currentBox();
-  if(newBox > oldBox){
-    var dotsEl = cardArea.querySelector(".box-dots");
-    if(dotsEl){
-      var dotsHtml = "";
-      for(var di=1; di<=5; di++){
-        dotsHtml += '<span class="dot'+(di<=newBox?' on':'')+(di===newBox?' pop':'')+'"></span>';
-      }
-      dotsEl.innerHTML = dotsHtml;
-      return true;
-    }
+  var dotsEl = cardArea.querySelector(".box-dots");
+  if(!dotsEl) return false;
+  var shown = dotsEl.querySelectorAll(".dot.on").length;
+  if(newBox===shown) return false;
+  var dotsHtml = "";
+  for(var di=1; di<=5; di++){
+    var cls = di<=newBox ? ' on' : '';
+    if(newBox>shown && di===newBox) cls += ' pop';
+    if(newBox<shown && di>newBox && di<=shown) cls += ' drop';
+    dotsHtml += '<span class="dot'+cls+'"></span>';
   }
-  return false;
+  dotsEl.innerHTML = dotsHtml;
+  return true;
 }
 
 function finishWordRound(){
@@ -2303,7 +2310,7 @@ function finishWordRound(){
   applyProgress(clean);
   roundFinished = true;
 
-  if(clean) animateBoxLevelUp(oldBox);
+  animateBoxLevelUp(oldBox);
 
   // Error-review pass: a correct answer clears the word, persisted so a
   // reload mid-review doesn't bring already-fixed words back; a mistake

@@ -2074,9 +2074,11 @@ function fieldBlock(entry, field){
 // Explicit right/wrong line under a field (or under the matching grid):
 // kind = ok | bad | info. Text is set via textContent so a typed answer can
 // never inject markup; the correct form, when shown, goes in its own span.
+var lastFbEl = null;
 function setFb(field, kind, text, answerPart){
   var el = cardArea.querySelector('.fb[data-fb="'+field+'"]') || cardArea.querySelector('.fb[data-fb="__match"]');
   if(!el) return;
+  lastFbEl = el;
   el.className = "fb "+kind;
   el.textContent = text;
   if(answerPart){
@@ -2250,6 +2252,7 @@ function renderCard(){
     typoBtn.textContent = "Учтено";
     if(roundFinished && !cleanApplied){
       cleanApplied = true;
+      showVerdict(true);
       // Undo the mistake's own effect first (a learned word drops a box on
       // a mistake, see applyProgress), so the clean answer is scored from
       // where the word stood before this round, not on top of the drop.
@@ -2579,6 +2582,34 @@ function animateBoxLevelUp(oldBox){
   return false;
 }
 
+// One verdict per word, shown in the feedback line of the last answered field
+// (instead of a separate banner after the explanation): a plain "✓ Верно"
+// becomes the round's verdict; a longer note (stress, gender) keeps its text
+// and gets the verdict on a second line.
+function showVerdict(clean){
+  var el = lastFbEl;
+  if(!el || !document.body.contains(el)) return;
+  var text, kind = clean ? "ok" : "bad";
+  if(freePractice){
+    var noteTxt = redoActive ? "повтор после отката — не засчитывается" : "свободная практика — прогресс не меняется";
+    text = (clean ? "✓ Верно, без подсказок (" : "✗ Верно, но была ошибка или подсказка (") + noteTxt + ")";
+  } else {
+    text = clean ? "✓ Верно, без подсказок — слово идёт дальше"
+                 : "✗ Верно, но была ошибка или подсказка — слово вернётся завтра";
+  }
+  var plain = el.childNodes.length===1 && /^✓ Верно( \(после ошибки или подсказки\))?$/.test(el.textContent);
+  if(plain || el.getAttribute("data-verdict")==="whole"){
+    el.setAttribute("data-verdict","whole");
+    el.className = "fb "+kind;
+    el.textContent = text;
+  } else {
+    var v = el.querySelector(".fb-verdict");
+    if(!v){ v = document.createElement("div"); v.className = "fb-verdict"; el.appendChild(v); }
+    v.textContent = text;
+    el.className = "fb "+kind;
+  }
+  el.hidden = false;
+}
 function finishWordRound(){
   var fields = requiredFields(current);
   var clean = !stepMistake && !fields.some(function(f){ return mistaken[f] || hinted[f]; });
@@ -2639,18 +2670,7 @@ function finishWordRound(){
     row.appendChild(typoBtn);
   }
   row.appendChild(cont);
-  var banner = document.createElement("div");
-  if(freePractice){
-    banner.className = "round-banner ok";
-    var noteTxt = redoActive ? "повтор после отката — не засчитывается" : "свободная практика — прогресс не меняется";
-    banner.textContent = (clean ? "✓ Всё верно (" : "Были ошибки или подсказки (") + noteTxt + ")";
-  } else if(clean){
-    banner.className = "round-banner ok";
-    banner.textContent = "✓ Всё верно, без подсказок — слово идёт дальше";
-  } else {
-    banner.className = "round-banner bad";
-    banner.textContent = "✗ Были ошибки или подсказки — слово вернётся завтра";
-  }
+  showVerdict(clean);
   var expl = explainFor(current);
   if(expl){
     var eb = document.createElement("div");
@@ -2661,7 +2681,6 @@ function finishWordRound(){
     eb.appendChild(document.createTextNode(expl));
     cardArea.appendChild(eb);
   }
-  cardArea.appendChild(banner);
   cardArea.appendChild(row);
   if(!freePractice && !reviewingErrors && lastUndo){
     var undo = document.createElement("button");

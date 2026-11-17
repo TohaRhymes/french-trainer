@@ -1236,9 +1236,21 @@ if(typeof speechSynthesis !== "undefined"){
   pickVoice();
   speechSynthesis.onvoiceschanged = pickVoice;
 }
+// Picks the best voice for a language. The first "fr*" voice in the list is
+// often Canadian (Amélie) or one of macOS's novelty voices (Grandma, Rocko…),
+// which swallow short unstressed words like a final "de". So: prefer the
+// exact locale (fr-FR), skip novelty voices, and favour known good ones.
+var NOVELTY_VOICES = /^(Grandma|Grandpa|Rocko|Shelley|Sandy|Flo|Eddy|Reed|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Albert|Fred|Junior|Kathy|Ralph)\b/i;
+var PREFERRED_VOICES = /^(Google fran|Thomas|Audrey|Aurélie|Marie|Microsoft (Denise|Henri|Julie|Paul))/i;
 function voiceForLangCode(code){
-  var prefix = (code||"fr-FR").split("-")[0].toLowerCase();
-  return allVoices.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf(prefix)===0; }) || null;
+  code = (code||"fr-FR").replace("_","-").toLowerCase();
+  var prefix = code.split("-")[0];
+  function lang(v){ return (v.lang||"").replace("_","-").toLowerCase(); }
+  var ok = allVoices.filter(function(v){ return lang(v).indexOf(prefix)===0 && !NOVELTY_VOICES.test(v.name); });
+  var exact = ok.filter(function(v){ return lang(v)===code; });
+  var pool = exact.length ? exact : ok;
+  return pool.find(function(v){ return PREFERRED_VOICES.test(v.name); }) ||
+         pool.find(function(v){ return v.localService; }) || pool[0] || null;
 }
 function makeUtterance(text, langCode){
   var code = langCode || "fr-FR";
@@ -1254,6 +1266,10 @@ function makeUtterance(text, langCode){
 function speakFR(text, deckId){
   var deck = deckId && state.decks[deckId];
   var lang = (deck && deck.lang) || DEFAULT_LANG;
+  // A phrase ending in a mute-e word ("à cause de", "parce que") gets its
+  // last vowel swallowed by the voice — "à cause d". Spelling that word out
+  // as it sounds when stressed ("deu", "queu") makes the vowel audible.
+  if(/^fr/i.test(lang.code||"fr")) text = String(text).replace(/(\s)(de|que|le|ce|se|me|te|ne|je)\s*([.!?…]*)\s*$/i, "$1$2u$3");
   try{ speechSynthesis.cancel(); speechSynthesis.speak(makeUtterance(text, lang.code)); }catch(e){}
 }
 

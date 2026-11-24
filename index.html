@@ -1321,6 +1321,9 @@ async function openMembersOverlay(){
   try{
     var snap = await withTimeout(dbNS.collection("summaries").get(), 10000);
     if(snap.empty){ list.textContent = "Пока никто не занимался."; return; }
+    // accounts marked `inactive` (e.g. moved to another host) stay in the db but are not shown
+    snap.docs = snap.docs.filter(function(d){ return !(d.data()||{}).inactive; });
+    if(!snap.docs.length){ list.textContent = "Пока никто не занимался."; return; }
     var ids = snap.docs.map(function(d){ return d.id; });
     var profs = userNSRef && userNSRef.profiles ? await userNSRef.profiles(ids) : {};
     list.textContent = "";
@@ -1364,6 +1367,7 @@ async function openMembersOverlay(){
     try{ copiesSnap = await withTimeout(dbNS.collection("copies").get(), 10000); }catch(e){}
     if(copiesSnap) copiesSnap.docs.forEach(function(cd){
       var c = cd.data() || {}, pr2 = profs[cd.id] || {};
+      if(c.inactive) return;
       var det = document.createElement("details"); det.className = "member-det";
       var sm = document.createElement("summary");
       sm.textContent = "Прогресс по словам — "+(pr2.name || "Участник")+" (обновлено "+relText(c.updatedAt)+")";

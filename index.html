@@ -1926,7 +1926,21 @@ function shuffle(arr){
 // A word with progress.seen===false has never been answered (a fresh deck or
 // a word added later); progress written before this feature has no `seen`
 // at all and counts as already started.
-var PORTION_SIZE = 40;   // words per scope per day before "Ещё порцию"
+var PORTION_DEFAULT = 40;  // words per scope per day until there is some history
+var PORTION_MIN = 15;      // the adaptive portion never goes below this
+// The portion follows the person: their average words per active day over
+// the last 14 days (state.history[date] = words answered that day, today
+// excluded). Under 2 days of history it stays at the default.
+function portionSize(){
+  var h = (state && state.history) || {}, t = todayStr(), vals = [];
+  Object.keys(h).forEach(function(d){
+    if(d===t || !(h[d]>0)) return;
+    if(daysBetween(d, t) <= 14) vals.push(h[d]);
+  });
+  if(vals.length<2) return PORTION_DEFAULT;
+  var avg = vals.reduce(function(a,b){ return a+b; }, 0) / vals.length;
+  return Math.max(PORTION_MIN, Math.round(avg));
+}
 var NEW_PACK = 10;       // new words per "Новые слова из этой темы"
 var portionHidden = 0;   // due words left out of today's portion
 function smartOrderOn(){ return state.smartOrder !== false; }
@@ -2019,7 +2033,7 @@ function startNewWords(){
   launchQueue(pack);
 }
 function startMorePortion(){
-  addPortionBonus(PORTION_SIZE);
+  addPortionBonus(portionSize());
   launchQueue(buildDueQueue());
 }
 // Everything due plus every new word of the scope, no portion limit.
@@ -2056,7 +2070,7 @@ function buildDueQueue(){
   });
   t1.sort(function(a,b){ return b._o-a._o; });
   var ordered = t1.concat(shuffle(t2));
-  var cap = Math.max(0, PORTION_SIZE + portionBonus() - dailyWordsInScope().length);
+  var cap = Math.max(0, portionSize() + portionBonus() - dailyWordsInScope().length);
   var take = ordered.slice(0, cap);
   portionHidden = ordered.length - take.length;
   var out = [];
@@ -3153,6 +3167,12 @@ function finishWordRound(){
     dailyPatch.daily.words[key] = true;
     if(clean){ dailyPatch.daily.cleanWords = {}; dailyPatch.daily.cleanWords[key] = true; }
     patchState(dailyPatch);
+    // words answered per day, for the adaptive portion (portionSize)
+    if(!state.history) state.history = {};
+    state.history[state.daily.date] = Object.keys(state.daily.words).length;
+    var histPatch = {history:{}};
+    histPatch.history[state.daily.date] = state.history[state.daily.date];
+    patchState(histPatch);
   }
   updateProgressBar();
   renderStats();
@@ -3351,7 +3371,7 @@ function renderSummary(isFinal){
     if(hotLeft>0){
       title = "Порция выполнена";
       smartHint = '<p class="summary-remaining">Ещё к повторению сегодня: '+hotLeft+' '+pluralRu(hotLeft,["слово","слова","слов"])+'</p>';
-      smartHtml = '<button class="btn primary" id="moreBtn">Ещё порцию (+'+Math.min(PORTION_SIZE, hotLeft)+')</button>'+
+      smartHtml = '<button class="btn primary" id="moreBtn">Ещё порцию (+'+Math.min(portionSize(), hotLeft)+')</button>'+
         '<button class="btn ghost" id="learnAllBtn">Выучить всё '+scopeWord+'</button>';
       practicePrimary = false;
     } else {

@@ -3297,7 +3297,7 @@ function renderSummary(isFinal){
   if(redoActive){ redoActive = false; freePractice = false; }
   renderStats();
   var pct = batchSeen ? Math.round((batchCorrect/batchSeen)*100) : 0;
-  var title = isFinal ? "На сегодня всё" : "Мини-тренировка пройдена";
+  var title = isFinal ? "На сегодня всё" : (batchSeen ? "Мини-тренировка пройдена" : "На сегодня запланировано");
   var remaining = queue.length;
   var miniLeft = Math.ceil(remaining / BATCH_SIZE);
   var dayWords = dailyWordsInScope().length;
@@ -3352,7 +3352,7 @@ function renderSummary(isFinal){
   // answered, not reviewing): the title already says it, and a third
   // centered line of a different width made the stack's edges zigzag.
   var dayStatsBig = !batchSeen && dayWords && !reviewingErrors;
-  var emptyText = (!batchSeen && !dayStatsBig)
+  var emptyText = (isFinal && !batchSeen && !dayStatsBig)
     ? (smartOrderOn() && isFinal && !pendingErrors.length && !dayWords && heat0Fresh()
       ? '<p class="hint hint-wide">Горячего на сегодня нет — можно взять новые слова.</p>'
       : pendingErrors.length

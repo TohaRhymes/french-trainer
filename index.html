@@ -1849,13 +1849,15 @@ function frenchAudioFor(e, field){
   }
   return e.word[0];
 }
-// At box 5 (the last, most-practiced level) a conjug card shows the Russian
-// translation instead of the French infinitive — she has to recall the verb
-// herself before conjugating it, instead of having it handed to her.
+// From box 3 (where answers are typed) a verb card shows only the Russian
+// translation: no "find the verb" step 1 and no infinitive handed over as a
+// hint — the verb is recalled and every form typed. Other conjug-kind decks
+// (comparatifs-chaines, with its own eyebrow) keep the old threshold, box 5.
 function conjugShowsRussian(e){
   if(e.kind!=="conjug") return false;
   var deck = state.decks[e.deckId];
-  return currentBox()>=5 || !!(deck && deck.promptRussian);
+  var from = (deck && deck.conjugEyebrow) ? 5 : 3;
+  return currentBox()>=from || !!(deck && deck.promptRussian);
 }
 // Splits a cloze translation like "он хороший (прил., м.р.)" into the
 // Russian sentence and its trailing grammar note, so a deck can show the

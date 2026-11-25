@@ -1945,9 +1945,11 @@ var NEW_PACK = 10;       // new words per "Новые слова из этой �
 var portionHidden = 0;   // due words left out of today's portion
 function smartOrderOn(){ return state.smartOrder !== false; }
 function isNewProg(p){ return !!p && p.seen === false; }
-function portionBonus(){ var b = (state.daily && state.daily.bonus) || {}; return b[scopeKey()] || 0; }
+// db field names can't look like __name__ (reserved), and scope keys can ("__all__"), so prefix and sanitize
+function bonusKey(){ return "s_"+scopeKey().replace(/[^A-Za-z0-9_\-]/g, "_"); }
+function portionBonus(){ var b = (state.daily && state.daily.bonus) || {}; return b[bonusKey()] || 0; }
 function addPortionBonus(n){
-  var k = scopeKey();
+  var k = bonusKey();
   if(!state.daily.bonus) state.daily.bonus = {};
   state.daily.bonus[k] = (state.daily.bonus[k]||0) + n;
   var patch = {daily:{date: state.daily.date, bonus:{}}};
